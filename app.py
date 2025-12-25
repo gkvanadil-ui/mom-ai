@@ -149,35 +149,34 @@ with tabs[0]:
             st.write(f"---")
             st.write(f"**✅ {p_key} 결과물이에요!**")
             
-            # 🔥 핵심 수정: 사용자가 직접 수정한 내용도 세션에 반영되도록 함
-            current_txt = st.text_area(f"{p_key} 내용", 
-                                     value=st.session_state.texts[p_key], 
-                                     height=350, 
-                                     key=f"area_{p_key}")
+            # 입력창 (사용자가 여기서 직접 수정도 가능)
+            # value를 session_state와 직접 연결합니다.
+            st.session_state.texts[p_key] = st.text_area(
+                f"{p_key} 내용", 
+                value=st.session_state.texts[p_key], 
+                height=350, 
+                key=f"area_{p_key}"
+            )
             
-            with st.expander(f"✨ {p_key} 글이 마음에 안 드신다면?"):
-                # 폼(Form)을 사용하여 버튼 클릭 시 입력값이 날아가지 않게 보호
-                with st.form(key=f"form_{p_key}"):
-                    feedback = st.text_input("고치고 싶은 부분을 적어주세요", 
-                                           placeholder="예: 조금 더 짧게 써줘, 해시태그 더 늘려줘",
-                                           key=f"input_{p_key}")
-                    
-                    submit_refine = st.form_submit_button("♻️ 다시 정성껏 쓰기")
-                    
-                    if submit_refine:
-                        if feedback:
-                            with st.spinner("작가님의 요청을 담아 다시 쓰고 있어요..."):
-                                # 피드백을 반영하여 다시 생성
-                                refine_prompt = {
-                                    "name": p_key,
-                                    "desc": f"기존에 쓴 글: {current_txt}\n\n위 글에서 다음 요청사항을 반영해 다시 써줘: {feedback}\n\n말투는 여전히 작가님 샘플처럼 다정하고 포근해야 해요."
-                                }
-                                new_text = process_mog_ai(refine_prompt)
-                                # 🔥 세션 상태 업데이트 후 화면 갱신
-                                st.session_state.texts[p_key] = new_text
-                                st.rerun()
-                        else:
-                            st.warning("고칠 내용을 먼저 적어주셔요🌸")
+            # 수정 요청 칸
+            with st.expander(f"✨ {p_key} 글을 AI에게 다시 부탁하기"):
+                # 폼 없이 버튼 클릭 시 바로 변수를 참조하도록 함
+                new_feedback = st.text_input("어떻게 고쳐드릴까요?", placeholder="예: 조금 더 짧게, 더 다정하게", key=f"feed_{p_key}")
+                
+                if st.button("♻️ 다시 정성껏 쓰기", key=f"btn_re_{p_key}"):
+                    if not new_feedback:
+                        st.warning("고칠 내용을 적어주셔요🌸")
+                    else:
+                        with st.spinner("작가님 마음을 담아 다시 고쳐 쓰는 중..."):
+                            # 현재 창에 떠있는 글(st.session_state.texts[p_key])을 바탕으로 다시 씁니다.
+                            refine_prompt = {
+                                "name": p_key,
+                                "desc": f"원래 쓴 글: {st.session_state.texts[p_key]}\n\n요청사항: {new_feedback}\n\n위 내용을 반영해서 작가님 말투로 다시 써주세요."
+                            }
+                            # 결과 업데이트
+                            st.session_state.texts[p_key] = process_mog_ai(refine_prompt)
+                            # 페이지 강제 새로고침 (수정된 글을 보여주기 위함)
+                            st.rerun()
 
 
 
