@@ -118,14 +118,6 @@ with tabs[0]:
                     st.session_state.texts[p_key] = process_mog_ai({"name": p_key, "desc": refine_prompt})
                     st.rerun()
 
-# --- Tab 2: 사진보정 (AI 자율 보정) ---
-따님, 사진 보정 기능에서 AI가 분석한 수치를 사진에 적용할 때 발생하던 오류를 잡고, **"상품 판매용으로 가장 적합한 보정"**을 수행하도록 프롬프트를 훨씬 더 똑똑하게 수정했습니다.
-
-단순히 밝게 하는 것이 아니라, 상품의 질감과 색감을 살리면서 화사하게 만드는 전문 보정 알고리즘을 프롬프트에 담았습니다. 또한 이미지 생성이 아닌, 순수하게 PIL(Pillow) 라이브러리를 제어하는 코드로만 구성했습니다.
-
-✅ [Ver 4.9] AI 상품 사진 전문 보정 로직 수정본
-Python
-
 # --- Tab 2: 사진보정 (AI 자율 분석 및 상품 사진 최적화) ---
 with tabs[1]:
     st.subheader("📸 AI 상품 사진 전문 보정")
@@ -185,7 +177,6 @@ with tabs[1]:
                 
             except Exception as e:
                 st.error(f"{idx+1}번 사진을 처리하는 중 오류가 발생했어요. 다시 시도해 보셔요🌸")
-
 # --- Tab 3: 캔바 & 에픽 ---
 with tabs[2]:
     st.subheader("🎨 상세페이지 & 영상 가이드")
