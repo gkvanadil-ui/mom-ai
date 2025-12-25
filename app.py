@@ -78,12 +78,12 @@ def generate_text(platform_type, specific_prompt):
     당신은 브랜드 '모그(Mog)'의 전담 카피라이터입니다. 
     작가 '모그'님의 철학이 드러나도록 [{platform_type}] 판매글을 아주 상세하고 길게 작성하세요.
 
-    [모그 작가님의 브랜드 철학]
-    1. 희소성: 똑같은 디자인은 다시 만들지 않습니다. 세상에 단 하나뿐인 유니크함.
-    2. 손맛: 일정하지 않은 스티치와 바느질 자국에서 느껴지는 손작업만의 온기.
-    3. 실용성: 뒷포켓, 야무진 안감 처리, 별도 파우치 증정 등 사용자를 향한 배려.
-    4. 선물: 모든 배송은 소중한 친구에게 선물하는 마음으로 정성껏 포장함.
-    5. 어투: "~이지요^^", "~만들어봤어요" 처럼 밝고 다정한 말투.
+    [모그 작가님의 브랜드 철학 및 어투]
+    1. 희소성: "같은 디자인은 다시 만들지 않습니다. 세상에 단 하나뿐인 작품입니다."
+    2. 손맛: "일정하지 않은 스티치와 바느질 자국에서 느껴지는 손작업만의 온기."
+    3. 실용성: "뒷포켓의 편리함, 안감 처리된 튼튼한 파우치, 야무진 수납" 포인트 강조.
+    4. 포장: "모든 배송은 소중한 친구에게 선물하는 마음으로 정성껏 포장합니다."
+    5. 어투: "~이지요^^", "~만들어봤어요", "ok👭", "좋아요🌻" 처럼 밝고 다정한 말투.
 
     [데이터 정보]
     제품명: {name} / 특징: {keys} / 소재: {mat} / 사이즈: {size} / 제작진심: {process} / 포장: {care}
@@ -92,32 +92,36 @@ def generate_text(platform_type, specific_prompt):
     """
     
     with st.spinner(f"작가 '모그'의 진심을 담아 작성 중..."):
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": full_prompt}]
-        )
-        return response.choices[0].message.content
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": full_prompt}]
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            st.error(f"오류가 발생했습니다: {e}")
+            return None
 
 with tab1:
-    st.subheader("인스타그램: 감성 소통 스타일")
+    st.subheader("인스타그램 스타일")
     if st.button("🪄 인스타용 글 만들기"):
-        instr = "감성 도입부와 해시태그를 섞은 밝은 어투로 작성하세요. 모그님 특유의 다정한 말투를 살려주세요."
+        instr = "감성적인 도입부, 문장 중간의 해시태그, 다정한 말투를 섞어 상세히 써주세요."
         result = generate_text("인스타그램", instr)
         if result:
             st.text_area("인스타 결과", value=result, height=550)
 
 with tab2:
-    st.subheader("아이디어스: 작가의 정성 스타일")
+    st.subheader("아이디어스 스타일")
     if st.button("🪄 아이디어스용 글 만들기"):
-        instr = "작가 샘플 말투(외출도 ok👭, 좋지요👍)를 적극 반영하고, 패치워크의 가치와 제작 스토리를 상세히 풀어내세요."
+        instr = "작가님의 제작 스토리와 샘플 어투(ok👭, 좋아요🌻)를 듬뿍 넣어 아주 정성스럽게 길게 써주세요."
         result = generate_text("아이디어스", instr)
         if result:
             st.text_area("아이디어스 결과", value=result, height=600)
 
 with tab3:
-    st.subheader("스마트스토어: 친절한 상세 가이드")
+    st.subheader("스마트스토어 스타일")
     if st.button("🪄 스마트스토어용 글 만들기"):
-        instr = "구분선(⸻)과 불렛 포인트를 활용해 전문 쇼핑몰처럼 깔끔하면서도, 모그 작가님만의 친절한 설명이 돋보이게 작성하세요."
+        instr = "구분선(⸻)과 불렛 포인트를 사용하고, 샘플처럼 정보(사이즈, 관리법 등)를 매우 상세하고 친절하게 정리하세요."
         result = generate_text("스마트스토어", instr)
         if result:
             st.text_area("스토어 결과", value=result, height=700)
