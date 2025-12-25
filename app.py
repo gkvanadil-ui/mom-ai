@@ -143,22 +143,41 @@ with tabs[0]:
         }
         st.session_state.texts["네이버 스마트스토어"] = process_mog_ai(store_guide)
 
-    # 결과물 출력 부분 (기존 로직 유지)
+# 결과물 출력 및 수정 로직
     for p_key in ["인스타그램", "아이디어스", "네이버 스마트스토어"]:
         if st.session_state.texts[p_key]:
             st.write(f"---")
             st.write(f"**✅ {p_key} 결과물이에요!**")
-            current_txt = st.text_area(f"{p_key} 내용", value=st.session_state.texts[p_key], height=350, key=f"area_{p_key}")
+            
+            # 🔥 핵심 수정: 사용자가 직접 수정한 내용도 세션에 반영되도록 함
+            current_txt = st.text_area(f"{p_key} 내용", 
+                                     value=st.session_state.texts[p_key], 
+                                     height=350, 
+                                     key=f"area_{p_key}")
             
             with st.expander(f"✨ {p_key} 글이 마음에 안 드신다면?"):
-                feedback = st.text_input("고치고 싶은 부분을 적어주세요", placeholder="예: 조금 더 짧게 써줘", key=f"f_{p_key}")
-                if st.button("♻️ 다시 정성껏 쓰기", key=f"b_{p_key}"):
-                    refine_prompt = {
-                        "name": p_key,
-                        "desc": f"기존글: {current_txt}\n요청사항: {feedback}\n작가님 샘플처럼 다정하고 포근한 말투로 다시 작성해 주세요."
-                    }
-                    st.session_state.texts[p_key] = process_mog_ai(refine_prompt)
-                    st.rerun()
+                # 폼(Form)을 사용하여 버튼 클릭 시 입력값이 날아가지 않게 보호
+                with st.form(key=f"form_{p_key}"):
+                    feedback = st.text_input("고치고 싶은 부분을 적어주세요", 
+                                           placeholder="예: 조금 더 짧게 써줘, 해시태그 더 늘려줘",
+                                           key=f"input_{p_key}")
+                    
+                    submit_refine = st.form_submit_button("♻️ 다시 정성껏 쓰기")
+                    
+                    if submit_refine:
+                        if feedback:
+                            with st.spinner("작가님의 요청을 담아 다시 쓰고 있어요..."):
+                                # 피드백을 반영하여 다시 생성
+                                refine_prompt = {
+                                    "name": p_key,
+                                    "desc": f"기존에 쓴 글: {current_txt}\n\n위 글에서 다음 요청사항을 반영해 다시 써줘: {feedback}\n\n말투는 여전히 작가님 샘플처럼 다정하고 포근해야 해요."
+                                }
+                                new_text = process_mog_ai(refine_prompt)
+                                # 🔥 세션 상태 업데이트 후 화면 갱신
+                                st.session_state.texts[p_key] = new_text
+                                st.rerun()
+                        else:
+                            st.warning("고칠 내용을 먼저 적어주셔요🌸")
 
 
 
