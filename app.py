@@ -367,46 +367,50 @@ with tabs[2]:
     st.divider()
     st.write("<p style='text-align: center; color: #7d6e63;'>오늘도 작가님의 소중한 작품이 빛나길 응원합니다. 화이팅! 🕯️</p>", unsafe_allow_html=True)
 
-# --- Tab 4: 무엇이든 물어보세요 (채팅방 형식) ---
+# --- Tab 4: 무엇이든 물어보세요 (채팅방 전용 로직) ---
 with tabs[3]:
-    st.subheader("💬 모그 작가님 고민 상담소")
-    st.write("작품 활동 중 생기는 고민이나 궁금증을 편하게 말씀해 주세요. 다정한 동료 작가가 되어 드릴게요. 🌸")
+    st.markdown("### 💬 모그 작가님 전용 상담소")
+    st.caption("동료 작가 AI와 나누는 다정한 대화방입니다. 🌸")
 
-    # 1. 대화 내역을 저장할 공간(금고) 만들기
+    # 1. 대화 기록을 저장할 금고(세션 스테이트)가 없으면 만들기
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # 2. 이전 대화 내역 화면에 보여주기
-    # 이 부분 덕분에 대화가 누적되어 보입니다.
-    for message in st.session_state.chat_history:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+    # 2. 채팅 내역을 화면에 뿌려주기 (이게 있어야 이전 대화가 보임)
+    # container를 써서 대화창 영역을 깔끔하게 확보합니다.
+    chat_container = st.container()
+    
+    with chat_container:
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
 
-    # 3. 사용자 질문 입력창 (화면 하단에 생깁니다)
-    if prompt := st.chat_input("작가님의 고민을 들려주세요..."):
+    # 3. 채팅 입력창 (화면 맨 아래에 카톡처럼 생깁니다)
+    # 여기에 글을 쓰고 엔터를 치면 아래 로직이 실행됩니다.
+    if prompt := st.chat_input("작가님, 어떤 고민이 있으신가요?"):
         
-        # 엄마가 보낸 메시지 화면에 표시 및 저장
+        # [사용자] 질문 표시 및 저장
         with st.chat_message("user"):
             st.write(prompt)
         st.session_state.chat_history.append({"role": "user", "content": prompt})
 
-        # AI의 다정한 답변 생성
+        # [AI] 답변 생성
         with st.chat_message("assistant"):
-            with st.spinner("작가님의 마음을 헤아리는 중입니다..."):
+            with st.spinner("생각 중이지요... 🌸"):
                 try:
                     client = openai.OpenAI(api_key=api_key)
                     
-                    # 상담소 전용 어투 지침 (이전 대화 맥락 포함)
-                    full_messages = [
-                        {"role": "system", "content": "당신은 핸드메이드 브랜드 '모그' 작가님의 다정한 동료 AI입니다. 50대 여성 작가님께 존댓말로 다정하게 (~이지요^^, ~해요) 답하세요. 특수기호 *나 **는 절대 쓰지 마세요."}
+                    # 상담소 전용 어투 프롬프트
+                    messages = [
+                        {"role": "system", "content": "당신은 50대 여성 작가 '모그'의 다정한 동료 작가입니다. 말투는 '~이지요^^', '~해요'를 사용하며 따뜻하게 공감해주세요. 특수기호 *나 **는 절대 사용하지 마세요."}
                     ]
-                    # 이전 대화 5개 정도만 기억하게 해서 답변 성능 유지
+                    # 이전 대화 흐름 전달 (최근 5개)
                     for m in st.session_state.chat_history[-5:]:
-                        full_messages.append(m)
-                    
+                        messages.append(m)
+                        
                     response = client.chat.completions.create(
                         model="gpt-4o",
-                        messages=full_messages
+                        messages=messages
                     )
                     
                     answer = response.choices[0].message.content.replace("**", "").replace("*", "").strip()
@@ -415,10 +419,14 @@ with tabs[3]:
                     st.write(answer)
                     st.session_state.chat_history.append({"role": "assistant", "content": answer})
                     
-                except:
-                    st.error("잠시 오류가 생겼어요. 다시 한번 말씀해 주시겠어요?🌸")
+                    # 대화가 바로 업데이트되도록 리런
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error("앗, 잠시 대화가 끊겼어요. 다시 말씀해 주시겠어요? 🌸")
 
-    # 4. 대화 초기화 버튼 (필요할 때 새로 시작)
-    if st.button("♻️ 대화 내용 지우기"):
+    # 4. 하단 여백 및 초기화 버튼
+    st.write("")
+    if st.button("♻️ 대화 깨끗이 지우기", key="clear_chat"):
         st.session_state.chat_history = []
         st.rerun()
