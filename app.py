@@ -24,8 +24,8 @@ st.write("'세상에 단 하나뿐인 온기'를 전하는 모그 작가님의 �
 st.divider()
 
 # --- [공통 입력 구역] ---
-# 작가님이 입력하신 정보를 모든 탭에서 공통으로 사용합니다.
-with st.expander("📦 작업할 작품 정보 입력", expanded=True):
+# 모든 기능에서 공통으로 사용할 정보 입력창입니다.
+with st.expander("📦 작품 정보 입력 (글쓰기와 상세페이지에 사용됩니다)", expanded=True):
     col_in1, col_in2 = st.columns(2)
     with col_in1:
         name = st.text_input("📦 작품 이름", placeholder="예: 앤과 숲속 푸우 패치워크 보스턴백")
@@ -37,13 +37,12 @@ with st.expander("📦 작업할 작품 정보 입력", expanded=True):
         care = st.text_input("💡 배송/포장", placeholder="예: 별도 요청 없어도 선물용으로 정성껏 포장")
 
 # --- 메인 탭 구성 ---
-# 요청하신 대로 글 작성 / 이미지&상세페이지 / 영상 제작 팁 3개로 나눴습니다.
 tabs = st.tabs(["✍️ 글쓰기 센터", "🎨 이미지 & 상세페이지", "📱 영상 제작 팁"])
 
-# --- [Tab 1: 글쓰기 센터] (기존 로직 100% 유지) ---
+# --- [Tab 1: 글쓰기 센터] (기존 어투 프롬프트 100% 유지) ---
 with tabs[0]:
     st.header("✍️ 매체별 맞춤형 상세 글 생성")
-    tab_inst, tab_idus, tab_smart = st.tabs(["📸 인스타그램", "🎨 아이디어스", "🛍️ 스마트스토어"])
+    tab1, tab2, tab3 = st.tabs(["📸 인스타그램", "🎨 아이디어스", "🛍️ 스마트스토어"])
 
     def generate_text(platform_type, specific_prompt):
         if not api_key:
@@ -54,6 +53,7 @@ with tabs[0]:
             return None
 
         client = openai.OpenAI(api_key=api_key)
+        # 요청하신 어투 관련 프롬프트 내용을 그대로 유지합니다.
         full_prompt = f"""
         당신은 브랜드 '모그(Mog)'의 작가 본인입니다. 직접 고객에게 건네는 말투로 [{platform_type}] 판매글을 작성하세요.
 
@@ -71,6 +71,7 @@ with tabs[0]:
 
         {specific_prompt}
         """
+        
         with st.spinner(f"작가 '모그'의 목소리로 작성 중..."):
             try:
                 response = client.chat.completions.create(
@@ -83,19 +84,22 @@ with tabs[0]:
                 st.error(f"오류 발생: {e}")
                 return None
 
-    with tab_inst:
+    with tab1:
+        st.subheader("인스타그램 스타일 (깔끔&감성)")
         if st.button("🪄 인스타용 글 만들기"):
             instr = "작가로서 가벼운 일상 인사를 건네며 시작하세요. 너무 길지 않게 요약하고, 매력 포인트를 해시태그와 섞어주세요. 특정 예시 문구(ok 등)를 그대로 쓰지 말고 작가님만의 감성으로 새로 쓰세요."
             result = generate_text("인스타그램", instr)
             if result: st.text_area("인스타 결과", value=result, height=400)
 
-    with tab_idus:
+    with tab2:
+        st.subheader("아이디어스 스타일 (한 줄씩 정성 상세글)")
         if st.button("🪄 아이디어스용 글 만들기"):
             instr = "- 모든 문장이 끝나면 반드시 줄바꿈을 하여 '한 줄에 한 문장'만 나오게 하세요.\n- 문단 사이에는 빈 줄을 넣어 여유 있게 구성하세요.\n- 작가님의 제작 스토리와 정성을 다정하게 풀어내세요. 특정 예시 단어를 반복하지 마세요."
             result = generate_text("아이디어스", instr)
             if result: st.text_area("아이디어스 결과", value=result, height=600)
 
-    with tab_smart:
+    with tab3:
+        st.subheader("스마트스토어 스타일 (상세 정보 가이드)")
         if st.button("🪄 스마트스토어용 글 만들기"):
             instr = "구분선(⸻)과 불렛 포인트를 사용하세요. 작가로서 정보를 상세하고 친절하게 정리하세요. 제목에 별표 사용은 금지입니다."
             result = generate_text("스마트스토어", instr)
@@ -106,8 +110,8 @@ with tabs[1]:
     col_img1, col_img2 = st.columns([1, 1.2])
     
     with col_img1:
-        st.header("📸 사진 자동 보정")
-        uploaded_files = st.file_uploader("보정할 사진들을 선택하세요", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+        st.header("📸 사진 일괄 자동 보정")
+        uploaded_files = st.file_uploader("보정할 사진 선택", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
         def encode_image(image_bytes): return base64.b64encode(image_bytes).decode('utf-8')
 
         if uploaded_files and api_key:
@@ -138,7 +142,7 @@ with tabs[1]:
     with col_img2:
         st.header("🎨 캔바(Canva) 상세페이지 제작")
         canva_url = "https://www.canva.com/templates/?query=상세페이지"
-        st.link_button("✨ 모그 전용 캔바 작업실 열기", canva_url, use_container_width=True)
+        st.link_button("✨ 캔바 상세페이지 양식 작업실 열기", canva_url, use_container_width=True)
         
         st.divider()
         if st.button("🪄 캔바 대량 제작용 데이터 만들기"):
@@ -146,13 +150,13 @@ with tabs[1]:
             else:
                 client = openai.OpenAI(api_key=api_key)
                 prompt = f"모그 작가로서 {name} 상세페이지 5장을 기획하세요. JSON 배열로 [{{'순서': '1', '메인문구': '..', '설명': '..', '사진구도': '..'}}] 형식으로 답변하세요. 별표 금지."
-                with st.spinner("레시피 생성 중..."):
+                with st.spinner("캔바 레시피 생성 중..."):
                     res = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={ "type": "json_object" })
                     data = json.loads(res.choices[0].message.content)
                     df = pd.DataFrame(data[list(data.keys())[0]])
                     st.table(df)
                     csv = df.to_csv(index=False).encode('utf-8-sig')
-                    st.download_button("📥 캔바 업로드용 파일 받기", data=csv, file_name=f"moog_{name}.csv", mime="text/csv", use_container_width=True)
+                    st.download_button("📥 캔바 업로드용 파일(.csv) 받기", data=csv, file_name=f"moog_{name}.csv", mime="text/csv", use_container_width=True)
         
         st.success("**🎨 캔바 작업 순서**\n1. 파일 저장 -> 2. 작업실 열기 -> 3. 앱[대량 제작]에서 파일 업로드 -> 4. 오른쪽 클릭[데이터 연결]")
 
@@ -160,8 +164,8 @@ with tabs[1]:
 with tabs[2]:
     st.header("📱 에픽(EPIK) 앱 활용 가이드")
     st.info("""
-    **따님이 알려주는 가장 쉬운 영상 제작법:**
+    **가장 쉬운 영상 제작법:**
     1. **에픽(EPIK) 앱** 실행 -> 하단 **[템플릿]** 클릭
-    2. **'핸드메이드'** 검색 후 맘에 드는 디자인 선택
-    3. 보정한 사진들을 넣으면 음악과 효과가 자동으로 붙습니다!
+    2. **'핸드메이드'** 또는 **'상품홍보'** 검색 후 마음에 드는 디자인 선택
+    3. 보정한 사진들을 넣기만 하면 음악과 효과가 자동으로 붙습니다!
     """)
