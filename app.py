@@ -215,64 +215,67 @@ with tabs[1]:
                     except:
                         st.error(f"{idx+1}번 처리 오류🌸")
 
- # --- ✨ 기능 3: 직접 그려서 모자이크 (에러 원천 차단 버전) ---
+# --- ✨ 기능 3: 직접 그려서 모자이크 (에러 절대 안 나는 버전) ---
     st.divider()
     st.subheader("🎨 직접 그려서 모자이크 하기")
-    st.write("아래 사진을 보면서 가리고 싶은 위치를 똑같이 색칠해 주세요.")
+    st.write("위의 사진 위치를 참고해서, 아래 회색 판의 같은 자리에 슥슥 칠해 주세요.")
     
     manual_file = st.file_uploader("그림 그릴 사진 1장 선택", type=["jpg", "jpeg", "png"], key="manual_up")
     
     if manual_file:
-        # 1. 원본 사진 로드 및 표시
+        # 1. 사진 전처리 (회전 보정 및 RGB 변환)
         bg = Image.open(manual_file)
         bg = ImageOps.exif_transpose(bg)
         if bg.mode != 'RGB': bg = bg.convert('RGB')
         
-        # 2. 캔버스 크기 설정 (사진과 비율을 맞춤)
+        # 2. 크기 계산 (화면에 꽉 차게 조절)
         canvas_width = 600
         canvas_height = int(bg.height * (canvas_width / bg.width))
         
-        # 3. 사진을 먼저 보여줌 (엄마가 위치를 참고할 수 있게)
-        st.image(bg, width=canvas_width, caption="위 사진의 위치를 기억해서 아래 판에 칠해 주세요")
+        # 3. 사진을 먼저 보여줌 (엄마가 위치를 확인할 수 있는 기준 사진)
+        st.image(bg, width=canvas_width, caption="위 사진의 얼굴 위치를 아래 판에 그려주세요")
 
-        # 4. 🔥 에러 방지 핵심: background_image를 넣지 않음 (None 처리)
-        # 대신 배경색을 사진과 비슷하게 회색 등으로 설정하여 위치 가늠을 돕습니다.
-        stroke_width = st.slider("붓 크기", 5, 100, 30)
+        # 4. 🛠️ 에러 해결 핵심: background_image를 None으로 설정!
+        # 에러가 나는 원인인 '사진 주소 변환' 과정을 아예 삭제했습니다.
+        stroke_width = st.slider("붓 크기 조절 (얼굴 크기에 맞게)", 5, 150, 40)
         
-        st.write("👇 아래 회색 판에 얼굴 위치를 슥슥 칠하세요 (위 사진과 같은 위치)")
+        st.write("👇 아래 판에 위치를 똑같이 색칠하세요 (색칠한 곳이 모자이크됩니다)")
         canvas_result = st_canvas(
-            fill_color="rgba(0, 0, 0, 1)", 
+            fill_color="rgba(0, 0, 0, 1)",  # 칠하는 색 (검정)
             stroke_width=stroke_width,
-            stroke_color="rgba(0, 0, 0, 1)", 
-            background_color="#eeeeee", # 사진 대신 깔끔한 배경색 사용
-            height=canvas_height, 
-            width=canvas_width, 
-            drawing_mode="freedraw", 
-            key="manual_canvas_no_bg", # 키값 변경으로 상태 초기화
+            stroke_color="rgba(0, 0, 0, 1)",
+            background_color="#dcdcdc",     # 사진 대신 밝은 회색 판 사용
+            height=canvas_height,
+            width=canvas_width,
+            drawing_mode="freedraw",
+            key="safe_canvas_no_error",      # 에러 방지를 위해 새로운 키값 부여
             display_toolbar=True
         )
         
-        if st.button("🚀 칠한 부분 모자이크 실행"):
+        if st.button("🚀 선택한 부분 모자이크 실행"):
             if canvas_result.image_data is not None:
-                with st.spinner("모자이크 합성 중..."):
-                    # 사용자가 그린 검정색 붓자국(마스크) 추출
-                    mask_data = canvas_result.image_data[:, :, 3]
+                with st.spinner("칠하신 위치에 모자이크를 입히는 중..."):
+                    # 엄마가 그린 붓자국(알파 채널)만 가져오기
+                    mask_data = canvas_result.image_data[:, :, 3] 
                     mask_img = Image.fromarray(mask_data).resize(bg.size, resample=Image.NEAREST)
                     
-                    # 원본을 뭉갠 모자이크 배경 생성
-                    grain = 40 
+                    # 5. 모자이크 배경 만들기 (입자를 45px로 굵고 확실하게!)
+                    grain = 45
                     mosaic_bg = bg.resize((max(1, bg.width // grain), max(1, bg.height // grain)), resample=Image.BILINEAR)
                     mosaic_bg = mosaic_bg.resize(bg.size, resample=Image.NEAREST)
                     
-                    # 칠한 영역만 원본에 합성
+                    # 6. 원본 사진 위에 '그린 부분'만 모자이크 덮어씌우기
                     final_img = Image.composite(mosaic_bg, bg, mask_img)
                     
-                    st.image(final_img, caption="✨ 지정하신 위치 모자이크 완료!")
+                    st.image(final_img, caption="✨ 수동 모자이크가 완료되었습니다!")
                     
+                    # 결과물 저장
                     buf = io.BytesIO()
                     final_img.save(buf, format="JPEG", quality=95)
-                    st.download_button("📥 수동 모자이크 사진 저장", buf.getvalue(), "manual_mog.jpg")
-                    
+                    st.download_button("📥 완성된 사진 저장하기", buf.getvalue(), "manual_mosaic_final.jpg")
+            else:
+                st.warning("먼저 회색 판 위에 모자이크할 부분을 칠해 주세요🌸")
+                
                 
 # --- Tab 3: 캔바 & 에픽 ---
 with tabs[2]:
