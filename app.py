@@ -9,19 +9,17 @@ import json
 # 1. 페이지 설정
 st.set_page_config(page_title="모그 AI 비서", layout="centered")
 
-# --- CSS: 시인성 및 버튼 크기 최적화 ---
+# --- CSS: 다크모드 및 모바일 시인성 ---
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { color: inherit; }
     h1, h2, h3 { color: #D4A373 !important; font-weight: bold !important; margin-bottom: 12px; }
-    
     .stButton>button {
         width: 100%; border-radius: 12px; height: 3.8em;
         background-color: #7d6e63; color: white !important;
         font-weight: bold; font-size: 18px !important;
         border: none; margin-bottom: 8px;
     }
-    
     .stTextArea textarea {
         font-size: 17px !important;
         line-height: 1.6 !important;
@@ -29,13 +27,6 @@ st.markdown("""
         color: inherit !important;
         border: 1px solid #7d6e63 !important;
     }
-    
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] {
-        height: 55px; border-radius: 10px 10px 0 0;
-        padding: 5px 20px; font-weight: bold; font-size: 16px !important;
-    }
-    
     hr { border-top: 1px solid #7d6e63; opacity: 0.3; }
     </style>
     """, unsafe_allow_html=True)
@@ -44,7 +35,7 @@ st.markdown("""
 api_key = st.secrets.get("OPENAI_API_KEY")
 
 st.title("🕯️ 모그(Mog) 작가 전용 비서")
-st.write("<p style='text-align: center;'>작가님의 따뜻한 진심을 플랫폼에 맞게 전해드려요🌸</p>", unsafe_allow_html=True)
+st.write("<p style='text-align: center;'>작가님의 따뜻한 진심이 글에 그대로 담기도록 도와드려요🌸</p>", unsafe_allow_html=True)
 
 # --- [1단계: 정보 입력] ---
 st.header("1️⃣ 작품 정보 입력")
@@ -62,64 +53,76 @@ with st.expander("📝 이곳을 눌러 내용을 작성해주세요", expanded=
 
 st.divider()
 
-# --- AI 처리 함수 ---
-def process_ai_text(full_prompt):
+# --- AI 처리 함수 (어투 지침 강화) ---
+def process_mog_ai(platform_guide):
     if not api_key: return None
     client = openai.OpenAI(api_key=api_key)
-    try:
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": full_prompt}])
-        return response.choices[0].message.content.replace("**", "").strip()
-    except: return "오류가 발생했습니다. 다시 시도해 주세요."
+    
+    # [핵심 어투 프롬프트]
+    mog_tone_prompt = f"""
+    당신은 핸드메이드 브랜드 '모그(Mog)'를 운영하는 작가입니다. 
+    다음 지침을 반드시 지켜서 [{platform_guide['name']}] 판매글을 작성하세요.
 
-# --- [2단계: 작업 선택] ---
+    [어투 지침 - 가장 중요]
+    - 말투: 50대 여성 작가의 다정하고 따뜻한 말투를 사용하세요.
+    - 어미: '~이지요^^', '~해요', '~좋아요', '~보내드려요'를 주로 사용하세요.
+    - 금지 사항: 절대로 별표(*)나 볼드체(**) 같은 특수 기호를 사용하지 마세요. 
+    - 이모지: 꽃(🌸,🌻), 구름(☁️), 반짝이(✨)를 적절히 섞어주세요.
+
+    [플랫폼 지침]
+    - {platform_guide['desc']}
+
+    [작품 정보]
+    이름: {name} / 소재: {mat} / 크기: {size} / 기간: {period} / 관리: {care}
+    특징: {keys} / 포인트: {process}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o", 
+            messages=[{"role": "user", "content": mog_tone_prompt}]
+        )
+        return response.choices[0].message.content.replace("**", "").replace("*", "").strip()
+    except:
+        return "오류가 발생했습니다. 다시 시도해 주세요."
+
+# --- [2단계: 작업실 선택] ---
 st.header("2️⃣ 작업실 선택")
 tabs = st.tabs(["✍️ 판매글 쓰기", "📸 사진보정", "💡 캔바 & 에픽"])
 
-# --- Tab 1: 판매글 쓰기 (수정 요청 기능 복구) ---
+# --- Tab 1: 판매글 쓰기 ---
 with tabs[0]:
-    st.subheader("✍️ 플랫폼별 맞춤 글쓰기")
-    
     if 'texts' not in st.session_state:
         st.session_state.texts = {"인스타그램": "", "아이디어스": "", "네이버 스마트스토어": ""}
 
+    st.write("💡 아래 버튼을 누르면 작가님 말투로 글이 써집니다.")
     btn_col1, btn_col2, btn_col3 = st.columns(3)
-    platform = None
     
-    if btn_col1.button("📸 인스타그램"): platform = "인스타그램"
-    if btn_col2.button("🎨 아이디어스"): platform = "아이디어스"
-    if btn_col3.button("🛍️ 네이버 스마트스토어"): platform = "네이버 스마트스토어"
+    if btn_col1.button("📸 인스타그램"):
+        st.session_state.texts["인스타그램"] = process_mog_ai({"name": "인스타그램", "desc": "해시태그 포함, 감성적인 인사말과 계절감을 담은 일기 스타일."})
+    if btn_col2.button("🎨 아이디어스"):
+        st.session_state.texts["아이디어스"] = process_mog_ai({"name": "아이디어스", "desc": "줄바꿈을 매우 자주 하고, 작가님의 정성이 느껴지도록 짧은 문장 위주 작성."})
+    if btn_col3.button("🛍️ 스마트스토어"):
+        st.session_state.texts["네이버 스마트스토어"] = process_mog_ai({"name": "네이버 스마트스토어", "desc": "구분선(⸻)을 활용하여 소재, 사이즈, 관리법 정보를 한눈에 보기 좋게 정리."})
 
-    if platform:
-        with st.spinner(f"[{platform}]용 글을 작성 중입니다..."):
-            guide_text = ""
-            if platform == "인스타그램": guide_text = "해시태그 포함, 감성적인 인사말."
-            elif platform == "아이디어스": guide_text = "줄바꿈 자주, 꽃/하트 이모지 풍성하게."
-            else: guide_text = "구분선 활용, 정보 위주 정리."
-
-            prompt = f"""당신은 핸드메이드 작가 '모그'입니다. 말투: 다정한 엄마 말투 (~이지요^^, ~해요, ~좋아요). 별표(*) 절대 금지. 
-            내용: {platform} 판매글 ({guide_text}) 
-            정보: 이름:{name}, 특징:{keys}, 소재:{mat}, 사이즈:{size}, 제작:{process}, 관리:{care}, 기간:{period}"""
-            st.session_state.texts[platform] = process_ai_text(prompt)
-    
     for p_key in ["인스타그램", "아이디어스", "네이버 스마트스토어"]:
         if st.session_state.texts[p_key]:
             st.write(f"---")
             st.write(f"**✅ {p_key} 결과**")
-            current_txt = st.text_area(f"{p_key} (복사용)", value=st.session_state.texts[p_key], height=300, key=f"txt_{p_key}")
+            current_txt = st.text_area(f"{p_key} 내용", value=st.session_state.texts[p_key], height=300, key=f"area_{p_key}")
             
-            # [수정 요청 칸 복구]
-            with st.expander(f"✨ {p_key} 글 수정 요청하기"):
-                feedback = st.text_input("고치고 싶은 내용을 적어주세요", placeholder="예: 조금 더 다정하게 써줘 / 내용을 더 늘려줘", key=f"f_{p_key}")
+            with st.expander(f"✨ {p_key} 글 수정 요청"):
+                feedback = st.text_input("고칠 점을 적어주세요", key=f"f_{p_key}")
                 if st.button("♻️ 다시 쓰기", key=f"b_{p_key}"):
-                    refine_prompt = f"기존글: {current_txt}\n요청사항: {feedback}\n작가님 말투(~이지요^^)를 유지하며 다시 작성해줘."
-                    st.session_state.texts[p_key] = process_ai_text(refine_prompt)
+                    refine_prompt = f"기존글: {current_txt}\n요청사항: {feedback}\n작가님 말투(~이지요^^)와 기호 금지 규칙을 지켜서 다시 써줘."
+                    st.session_state.texts[p_key] = process_mog_ai({"name": p_key, "desc": refine_prompt})
                     st.rerun()
 
-# --- Tab 2: 사진보정 ---
+# --- Tab 2: 사진보정 (AI 자율 보정) ---
 with tabs[1]:
     st.subheader("📸 AI 자율 분석 보정")
-    uploaded_files = st.file_uploader("사진 선택", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-    if uploaded_files and api_key and st.button("🚀 AI 자동 보정 시작"):
+    uploaded_files = st.file_uploader("보정할 사진 선택", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    if uploaded_files and api_key and st.button("🚀 AI 보정 시작"):
         client = openai.OpenAI(api_key=api_key)
         for idx, file in enumerate(uploaded_files):
             img_bytes = file.getvalue()
@@ -128,7 +131,7 @@ with tabs[1]:
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": [
-                        {"type": "text", "text": '이 사진을 분석해 {"b":밝기, "c":대비, "s":채도, "sh":선명도} JSON으로만 답하세요.'},
+                        {"type": "text", "text": '사진을 분석해 {"b":밝기, "c":대비, "s":채도, "sh":선명도} JSON 출력.'},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
                     ]}],
                     response_format={ "type": "json_object" }
@@ -147,14 +150,12 @@ with tabs[1]:
 
 # --- Tab 3: 캔바 & 에픽 ---
 with tabs[2]:
-    st.subheader("🎨 상세페이지 & 영상 꿀팁")
+    st.subheader("🎨 상세페이지 & 영상 가이드")
     st.link_button("✨ 캔바(Canva) 앱 열기", "https://www.canva.com/templates/?query=상세페이지")
     if st.button("🪄 상세페이지 기획안 만들기"):
         if not name: st.warning("정보를 먼저 입력해 주셔요🌸")
         else:
-            with st.spinner("기획안 작성 중..."):
-                prompt = f"모그 작가 말투로 {name} 상세페이지 5장 기획안 작성."
-                st.write(process_ai_text(prompt))
+            st.write(process_mog_ai({"name": "캔바 기획안", "desc": "상세페이지 5장 구성 기획안 작성."}))
     st.divider()
-    with st.expander("🎥 에픽(EPIK) 영상 가이드"):
+    with st.expander("🎥 에픽(EPIK) 영상 제작법"):
         st.info("에픽 앱 실행 -> [템플릿] -> '감성' 검색 -> 사진 선택 -> 저장! 🌸")
