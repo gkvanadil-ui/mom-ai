@@ -12,7 +12,7 @@ st.set_page_config(page_title="엄마의 AI 명품 비서", layout="wide")
 st.sidebar.header("⚙️ AI 설정")
 api_key = st.sidebar.text_input("OpenAI API Key를 넣어주세요", type="password")
 
-st.title("🕯️ 엄마작가님을 위한 AI 통합 비서")
+st.title("🕯️ 사랑하는 엄마, 모그 작가님을 위한 AI 통합 비서")
 st.write("사진 보정부터 매체별(인스타/아이디어스/스토어) 맞춤 글쓰기까지 한 번에!")
 
 st.divider()
