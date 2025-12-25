@@ -53,52 +53,27 @@ def process_ai_text(full_prompt):
 # --- [Tab 1: 글쓰기 센터] ---
 with tabs[0]:
     st.header("✍️ 매체별 맞춤형 상세 글 생성")
-    
-    # 세션 상태 초기화 (글 저장용)
     if 'generated_texts' not in st.session_state:
         st.session_state.generated_texts = {"인스타그램": "", "아이디어스": "", "스마트스토어": ""}
-
     sub_tabs = st.tabs(["📸 인스타그램", "🎨 아이디어스", "🛍️ 스마트스토어"])
-
     platforms = ["인스타그램", "아이디어스", "스마트스토어"]
-    
     for i, platform in enumerate(platforms):
         with sub_tabs[i]:
-            # 1. 처음 글 만들기 버튼
             if st.button(f"🪄 {platform}용 글 만들기"):
                 platform_prompts = {
                     "인스타그램": "해시태그 포함, 계절 인사 포함, 감성 일기 스타일.",
                     "아이디어스": "짧은 문장, 줄바꿈 매우 자주, 꽃 이모지 풍성하게.",
                     "스마트스토어": "구분선(⸻)과 카테고리 활용, 정보 꼼꼼히 정리, 마지막 태그 포함."
                 }
-                
-                full_prompt = f"""
-                당신은 브랜드 '모그(Mog)' 작가입니다. [{platform}] 스타일로 작성하세요.
-                [작가님 어투] (~이지요^^, ~해요, ~좋아요 / 별표 금지 / 이모지 🌻🌸 활용)
-                [정보] 이름:{name}, 특징:{keys}, 소재:{mat}, 사이즈:{size}, 제작:{process}, 관리:{care}, 기간:{period}
-                [지침] {platform_prompts[platform]}
-                """
+                full_prompt = f"당신은 브랜드 '모그(Mog)' 작가입니다. [{platform}] 스타일로 작성하세요. [어투] ~이지요^^, ~해요, ~좋아요 / 별표 금지 / 이모지 활용. 이름:{name}, 특징:{keys}, 소재:{mat}, 사이즈:{size}, 제작:{process}, 관리:{care}, 기간:{period}. 지침: {platform_prompts[platform]}"
                 st.session_state.generated_texts[platform] = process_ai_text(full_prompt)
-
-            # 2. 결과 표시 및 수정 기능
             if st.session_state.generated_texts[platform]:
                 current_text = st.text_area(f"📄 {platform} 결과", value=st.session_state.generated_texts[platform], height=400, key=f"text_{platform}")
-                
                 st.divider()
                 st.subheader("💡 작가님, 수정하고 싶은 부분이 있으신가요?")
                 feedback = st.text_input("수정 요청 (예: 조금 더 짧게 써줘, 원단의 부드러움을 더 강조해줘)", key=f"feed_{platform}")
-                
                 if st.button("♻️ 요청대로 다시 고쳐쓰기", key=f"btn_{platform}"):
-                    refine_prompt = f"""
-                    기존에 당신이 작성한 글입니다:
-                    ---
-                    {current_text}
-                    ---
-                    위 글을 바탕으로 작가님의 다음 요청사항을 반영하여 다시 작성하세요:
-                    요청사항: {feedback}
-                    
-                    (작가님 말투와 플랫폼 형식은 그대로 유지해야 합니다!)
-                    """
+                    refine_prompt = f"기존 글: {current_text} \n요청사항: {feedback} \n위 내용을 반영해 작가님 말투로 다시 작성하세요."
                     new_text = process_ai_text(refine_prompt)
                     if new_text:
                         st.session_state.generated_texts[platform] = new_text
@@ -117,12 +92,7 @@ with tabs[1]:
             for idx, file in enumerate(uploaded_files):
                 img_bytes = file.getvalue()
                 try:
-                    response = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[{"role": "user", "content": [{"type": "text", "text": "화사한 보정 수치 JSON."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encode_image(img_bytes)}"}}]}],
-                        response_format={ "type": "json_object" }
-                    )
+                    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": [{"type": "text", "text": "화사한 보정 수치 JSON."}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encode_image(img_bytes)}"}}]}], response_format={ "type": "json_object" })
                     res = json.loads(response.choices[0].message.content)
                     img = Image.open(io.BytesIO(img_bytes))
                     edited = ImageEnhance.Brightness(img).enhance(res.get('b', 1.15))
@@ -135,8 +105,21 @@ with tabs[1]:
                 except Exception as e: st.error(f"오류: {e}")
 
     with col_img2:
-        st.header("🎨 캔바(Canva) 제작")
-        st.link_button("✨ 캔바 양식 검색 열기", "https://www.canva.com/templates/?query=상세페이지", use_container_width=True)
+        st.header("🎨 캔바(Canva) 상세페이지 제작")
+        
+        # --- 캔바 사용 안내 출력 ---
+        st.info("""
+        **🎨 작가님을 위한 캔바 작업실 사용법**
+        1. **내용 만들기**: 아래 '🪄 캔바 대량 제작용 데이터 생성' 버튼을 누르세요.
+        2. **파일 저장**: 생성된 표 아래 '📥 캔바 CSV 받기'를 눌러 컴퓨터에 저장하세요.
+        3. **캔바 열기**: '✨ 캔바 양식 작업실 열기' 버튼을 눌러 마음에 드는 디자인을 고르세요.
+        4. **대량 제작**: 캔바 왼쪽 메뉴 [앱] -> [대량 제작] -> [CSV 업로드]를 통해 방금 받은 파일을 넣으세요.
+        5. **연결하기**: 디자인의 글자를 오른쪽 클릭하고 [데이터 연결]을 누르면 글이 자동으로 쏙 들어간답니다!
+        """)
+        
+        st.link_button("✨ 캔바 상세페이지 양식 작업실 열기", "https://www.canva.com/templates/?query=상세페이지", use_container_width=True)
+        
+        st.divider()
         if st.button("🪄 캔바 대량 제작용 데이터 생성"):
             if not name: st.warning("정보를 먼저 입력해주셔요.")
             else:
