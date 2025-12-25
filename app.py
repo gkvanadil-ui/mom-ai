@@ -89,7 +89,7 @@ def process_mog_ai(platform_guide):
 
 # --- [2단계: 작업실 선택] ---
 st.header("2️⃣ 작업실 선택")
-tabs = st.tabs(["✍️ 판매글 쓰기", "📸 사진보정", "💡 캔바 & 에픽"])
+tabs = st.tabs(["✍️ 판매글 쓰기", "📸 사진보정", "💡 캔바 & 에픽", "💬 고민 상담소"])
 
 # --- Tab 1: 판매글 쓰기 ---
 with tabs[0]:
@@ -301,3 +301,53 @@ with tabs[2]:
 
     st.divider()
     st.write("<p style='text-align: center; color: #7d6e63;'>오늘도 작가님의 따뜻한 손길을 응원합니다. 화이팅! 🕯️</p>", unsafe_allow_html=True)
+
+# --- Tab 4: 무엇이든 물어보세요 (신설) ---
+with tabs[3]:
+    st.subheader("💬 모그 작가님 고민 상담소")
+    st.write("작품 활동을 하시며 궁금한 점이나 고민이 있다면 무엇이든 물어보세요. 다정하게 대답해 드릴게요. 🌸")
+    
+    # 질문 입력창
+    user_question = st.text_area("✍️ 궁금한 내용을 적어주세요", 
+                                placeholder="예: 뜨개 파우치에 어울리는 예쁜 이름을 추천해줘.\n손님이 배송이 늦어진다고 문의했는데 어떻게 답장하면 좋을까?",
+                                height=150)
+    
+    if st.button("🕯️ AI 작가에게 물어보기"):
+        if not user_question:
+            st.warning("질문을 먼저 입력해 주셔요🌸")
+        elif not api_key:
+            st.error("API 키가 설정되지 않았어요.")
+        else:
+            with st.spinner("작가님의 고민을 함께 나누는 중입니다..."):
+                try:
+                    client = openai.OpenAI(api_key=api_key)
+                    
+                    # 상담소 전용 다정한 프롬프트
+                    advice_prompt = f"""
+                    당신은 핸드메이드 작가들의 다정한 선배이자 동료인 '모그 AI'입니다. 
+                    50대 여성 작가님의 고민에 대해 다음 규칙을 지켜 답변하세요.
+                    
+                    1. 말투: 매우 다정하고 따뜻하게 (~이지요^^, ~해요, ~보내드려요)
+                    2. 내용: 구체적이고 실질적인 도움을 줄 것
+                    3. 금지: 별표(*)나 볼드체(**) 같은 특수 기호는 절대 사용하지 말 것
+                    4. 응원: 마지막에는 항상 작가님의 활동을 응원하는 따뜻한 말을 덧붙일 것
+                    
+                    질문 내용: {user_question}
+                    """
+                    
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": advice_prompt}]
+                    )
+                    
+                    answer = response.choices[0].message.content.replace("**", "").replace("*", "").strip()
+                    
+                    st.write("---")
+                    st.write("### 🕯️ 모그 AI의 다정한 답변")
+                    st.info(answer)
+                    
+                except:
+                    st.error("답변을 가져오는 중에 작은 오류가 생겼어요. 잠시 후 다시 물어봐 주세요🌸")
+
+    st.divider()
+    st.caption("💡 팁: '작품 이름 추천', '인스타그램 댓글 답장', '계절 인사말' 등을 물어보시면 아주 좋아요.")
