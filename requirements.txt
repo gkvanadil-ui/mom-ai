@@ -1,4 +1,5 @@
 streamlit
 rembg
 pillow
-onnxruntime
+openai
+requests
