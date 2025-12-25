@@ -1,124 +1,95 @@
 import streamlit as st
-from rembg import remove
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import io
-import openai
-import requests
 
 # 1. 앱 페이지 설정
-st.set_page_config(page_title="엄마의 프리미엄 AI 스튜디오", layout="centered")
+st.set_page_config(page_title="작가님을 위한 명품 보정 도구", layout="centered")
 
 st.markdown("""
     <style>
-    .main { background-color: #faf9f6; }
-    h1 { color: #5d4037; text-align: center; }
-    .stButton>button { width: 100%; border-radius: 20px; height: 3em; font-size: 18px; background-color: #8d6e63; color: white; }
+    .main { background-color: #f8f9fa; }
+    h1 { color: #2c3e50; text-align: center; font-size: 35px !important; }
+    .stButton>button { 
+        width: 100%; border-radius: 12px; height: 3.5em; 
+        background-color: #4a69bd; color: white; font-weight: bold;
+    }
+    .stSlider [data-baseweb="slider"] { margin-bottom: 25px; }
     </style>
     """, unsafe_allow_stdio=True)
 
-st.title("🕯️ 엄마의 프리미엄 AI 스튜디오")
-st.write("사진을 올리면 AI가 소품과 함께 자연스러운 연출샷을 만들어드려요.")
-
-# 2. 사이드바 설정 (비밀번호 형식으로 API 키 입력)
-st.sidebar.header("⚙️ 필수 설정")
-api_key = st.sidebar.text_input("OpenAI API Key를 넣어주세요", type="password")
-author_name = st.sidebar.text_input("작가 이름", value="엄마작가")
-
-# 3. 연출 컨셉 선택 (보내주신 사진 느낌 반영)
-st.header("📸 1. 연출 컨셉 선택")
-bg_concept = st.selectbox("어떤 분위기에서 찍은 것처럼 만들까요?", [
-    "포근한 베이지색 의자와 린넨 쿠션 (내추럴)",
-    "따뜻한 원목 테이블과 라탄 매트 (홈카페)",
-    "햇살 비치는 창가와 부드러운 화이트 커튼",
-    "세련된 대리석 테이블과 향초 소품 (쇼룸)"
-])
-
-# 컨셉별 정교한 프롬프트 정의 (제품이 붕 뜨지 않게 'placed on' 강조)
-concept_prompts = {
-    "포근한 베이지색 의자와 린넨 쿠션 (내추럴)": "placed on a cozy beige fabric chair, leaning against a soft white linen cushion, natural balcony lighting, realistic contact shadows, organic textures",
-    "따뜻한 원목 테이블과 라탄 매트 (홈카페)": "placed on a round rattan placemat on a wooden dining table, warm morning sun, cafe atmosphere, sharp focus on product, realistic shadows",
-    "햇살 비치는 창가와 부드러운 화이트 커튼": "sitting on a clean white window sill, soft sheer curtains in background, cinematic sunlight, high-end lifestyle photography",
-    "세련된 대리석 테이블과 향초 소품 (쇼룸)": "resting on a white marble table, next to a high-end scented candle, minimalist boutique interior, soft studio lighting"
-}
+st.title("✨ 작가님 전용 명품 보정 도구")
+st.write("AI 생성 대신, 엄마가 찍은 소중한 사진을 더 선명하고 아름답게 고쳐드려요.")
 
 st.divider()
 
-# 4. 사진 업로드 및 처리
+# 2. 사진 업로드
 uploaded_file = st.file_uploader("보정할 작품 사진을 선택하세요", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    # API 키 체크
-    if not api_key:
-        st.info("왼쪽 메뉴에 OpenAI API Key를 입력해주셔야 AI 기능이 작동합니다.")
-        st.stop()
+    # 사진 불러오기
+    img = Image.open(uploaded_file)
     
-    openai.api_key = api_key
+    # 원본과 보정본을 나란히 보여주기 위해 컬럼 나누기
+    col1, col2 = st.columns(2)
     
-    # 원본 이미지 표시
-    original_img = Image.open(uploaded_file)
-    st.image(original_img, caption="엄마가 찍은 원본", width=350)
+    with col1:
+        st.subheader("원본 사진")
+        st.image(img, use_container_width=True)
 
-    if st.button("✨ AI 프리미엄 연출 시작"):
-        with st.spinner("AI가 배경을 직접 설계하고 합성하는 중입니다..."):
-            try:
-                # [단계 1] 배경 제거
-                input_bytes = uploaded_file.getvalue()
-                subject_bytes = remove(input_bytes)
-                subject_img = Image.open(io.BytesIO(subject_bytes)).convert("RGBA")
+    # 3. 보정 컨트롤러 (사이드바 대신 직관적으로 화면에 배치)
+    st.header("🎨 어떻게 보정할까요?")
+    
+    # 잡티 제거 느낌을 주는 부드러움 조절 (Smooth)
+    smooth = st.slider("✨ 피부/바탕 부드럽게 (잡티 완화)", 0, 5, 0)
+    # 화사함 조절 (Brightness)
+    bright = st.slider("☀️ 사진 화사하게 (밝기)", 0.5, 2.0, 1.1)
+    # 선명도 조절 (Sharpness)
+    sharp = st.slider("🔍 디테일 선명하게", 0.5, 3.0, 1.5)
+    # 색감 조절 (Color)
+    color = st.slider("🌈 색감 생생하게 (채도)", 0.5, 2.0, 1.2)
+
+    if st.button("🚀 보정 적용하기"):
+        # 보정 로직 시작
+        with st.spinner("사진을 예쁘게 고치는 중..."):
+            # A. 밝기 보정
+            enhancer = ImageEnhance.Brightness(img)
+            edited = enhancer.enhance(bright)
+            
+            # B. 채도 보정 (색감)
+            enhancer = ImageEnhance.Color(edited)
+            edited = enhancer.enhance(color)
+            
+            # C. 잡티 완화 (부드러운 필터 적용)
+            for _ in range(smooth):
+                edited = edited.filter(ImageFilter.SMOOTH_MORE)
                 
-                # [단계 2] AI 배경 생성 (DALL-E 3)
-                # 바닥면(surface)과 그림자(shadow)를 강력하게 요구함
-                detail = concept_prompts[bg_concept]
-                full_prompt = f"A professional product photography background, {detail}. 8k resolution, photorealistic, blurred background, spacious surface for a product to be placed on."
-                
-                response = openai.images.generate(
-                    model="dall-e-3",
-                    prompt=full_prompt,
-                    size="1024x1024",
-                    n=1
-                )
-                
-                # 생성된 배경 가져오기
-                bg_url = response.data[0].url
-                bg_resp = requests.get(bg_url)
-                background = Image.open(io.BytesIO(bg_resp.content)).convert("RGBA")
-                
-                # [단계 3] 제품 합성 (바닥에 닿는 느낌 조절)
-                bg_w, bg_h = background.size
-                # 제품을 적절한 크기로 리사이즈 (배경의 55% 수준)
-                subject_img.thumbnail((bg_w * 0.55, bg_h * 0.55))
-                
-                # 합성 위치: 중앙 하단(바닥면)에 배치하여 붕 뜨지 않게 함
-                paste_x = (bg_w - subject_img.width) // 2
-                paste_y = (bg_h - subject_img.height) // 2 + 150 # 바닥 쪽에 가깝게 이동
-                
-                background.paste(subject_img, (paste_x, paste_y), subject_img)
-                
-                # [단계 4] 작가 이름표 추가
-                from PIL import ImageDraw
-                draw = ImageDraw.Draw(background)
-                draw.text((bg_w - 350, bg_h - 80), f"Handmade by {author_name}", fill=(255, 255, 255, 120))
-                
-                final_result = background.convert("RGB")
-                st.image(final_result, caption="완성된 프리미엄 연출샷", use_container_width=True)
-                
-                # 다운로드 버튼
-                buf = io.BytesIO()
-                final_result.save(buf, format="JPEG", quality=95)
-                st.download_button("📥 완성 사진 저장하기", buf.getvalue(), "premium_result.jpg")
-                
-            except Exception as e:
-                st.error(f"오류가 발생했습니다: {e}")
+            # D. 선명도 보정
+            enhancer = ImageEnhance.Sharpness(edited)
+            edited = enhancer.enhance(sharp)
+            
+            with col2:
+                st.subheader("보정 결과")
+                st.image(edited, use_container_width=True)
+            
+            # 4. 저장 버튼
+            buf = io.BytesIO()
+            edited.save(buf, format="JPEG", quality=95)
+            st.download_button(
+                label="📥 보정된 명품 사진 저장하기",
+                data=buf.getvalue(),
+                file_name="refined_product.jpg",
+                mime="image/jpeg"
+            )
 
 st.divider()
 
-# 5. 친절한 상세페이지 문구 (이전 로직 유지)
-st.header("✍️ 2. 정성 가득한 설명 쓰기")
-prod_name = st.text_input("작품 이름")
-prod_desc = st.text_area("작품의 특징 (짧게)")
+# 5. 상세페이지 글쓰기는 덤!
+st.header("✍️ 2. 상품 설명글 만들기")
+p_name = st.text_input("상품 이름")
+p_heart = st.text_area("엄마의 정성 한마디")
 
-if st.button("🪄 친절한 문구 생성"):
-    if prod_name and prod_desc:
-        text = f"🌸 **[{prod_name}]**\n\n안녕하세요, **{author_name}** 작가입니다.\n{prod_desc}\n\n작가인 제가 직접 검수하여 정성껏 보내드립니다. 문의는 언제든 편하게 주세요! 😊"
+if st.button("🪄 친절한 설명글 완성"):
+    if p_name and p_heart:
+        desc = f"🌸 **[{p_name}]**\n\n안녕하세요. 하나하나 손수 만드는 작가입니다.\n\n{p_heart}\n\n실물 느낌을 그대로 담기 위해 정성껏 보정했습니다. 궁금한 점은 톡톡 주세요!"
         st.success("글이 완성되었습니다!")
-        st.text_area("복사해서 사용하세요", value=text, height=200)
+        st.text_area("결과", value=desc, height=200)
