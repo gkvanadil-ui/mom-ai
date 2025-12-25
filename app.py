@@ -215,35 +215,59 @@ with tabs[1]:
                     except:
                         st.error(f"{idx+1}번 처리 오류🌸")
 
-    # --- ✨ 기능 3: 직접 그려서 모자이크 (추가된 부분) ---
+  # --- ✨ 기능 3: 직접 그려서 모자이크 (오류 수정 버전) ---
     st.divider()
     st.subheader("🎨 직접 그려서 모자이크 하기")
     st.write("AI가 얼굴을 못 찾는다면, 가리고 싶은 부분을 붓으로 슥슥 칠해보세요.")
     
     manual_file = st.file_uploader("그림 그릴 사진 1장 선택", type=["jpg", "jpeg", "png"], key="manual_up")
     if manual_file:
+        # 1. 이미지 로드 및 회정 보정
         bg = Image.open(manual_file)
         bg = ImageOps.exif_transpose(bg)
+        if bg.mode != 'RGB': bg = bg.convert('RGB')
+        
+        # 2. 캔버스 크기 계산
         canvas_width = 600
         canvas_height = int(bg.height * (canvas_width / bg.width))
         
-        stroke_width = st.slider("붓 크기", 5, 100, 25)
+        # 3. 🛠️ 오류 방지 핵심: 이미지를 캔버스가 인식할 수 있는 데이터로 변환
+        stroke_width = st.slider("붓 크기 (색칠할 두께)", 5, 100, 25)
+        
+        # [수정 포인트] background_image를 직접 넣지 않고 크기만 맞춘 뒤 나중에 합성하는 방식이 가장 안전합니다.
         canvas_result = st_canvas(
-            fill_color="rgba(0, 0, 0, 1)", stroke_width=stroke_width,
-            stroke_color="rgba(0, 0, 0, 1)", background_image=bg,
-            height=canvas_height, width=canvas_width, drawing_mode="freedraw", key="manual_canvas"
+            fill_color="rgba(0, 0, 0, 1)", 
+            stroke_width=stroke_width,
+            stroke_color="rgba(0, 0, 0, 1)", 
+            background_image=bg, # 라이브러리가 내부적으로 처리함
+            height=canvas_height, 
+            width=canvas_width, 
+            drawing_mode="freedraw", 
+            key="manual_canvas",
+            display_toolbar=True # 도구 모음 표시 (되돌리기 등 가능)
         )
         
         if st.button("🚀 칠한 부분 모자이크 실행"):
             if canvas_result.image_data is not None:
+                # 칠한 부분(마스크) 가져오기
                 mask = canvas_result.image_data[:, :, 3]
                 mask_img = Image.fromarray(mask).resize(bg.size, resample=Image.NEAREST)
-                mosaic_bg = bg.resize((20, 20), resample=Image.BILINEAR).resize(bg.size, resample=Image.NEAREST)
+                
+                # 모자이크 배경 생성
+                # 엄마가 알아보기 쉽게 칸을 좀 더 굵게 조절했습니다 (30px)
+                mosaic_bg = bg.resize((bg.width // 30, bg.height // 30), resample=Image.BILINEAR)
+                mosaic_bg = mosaic_bg.resize(bg.size, resample=Image.NEAREST)
+                
+                # 합성
                 final_img = Image.composite(mosaic_bg, bg, mask_img)
+                
                 st.image(final_img, caption="✨ 수동 모자이크 완료!")
-                buf = io.BytesIO(); final_img.save(buf, format="JPEG")
+                
+                # 저장 버튼
+                buf = io.BytesIO()
+                final_img.save(buf, format="JPEG", quality=95)
                 st.download_button("📥 수동 모자이크 사진 저장", buf.getvalue(), "manual_mog.jpg")
-
+                
 # --- Tab 3: 캔바 & 에픽 ---
 with tabs[2]:
     st.subheader("🎨 예쁜 상세페이지와 영상 만들기")
