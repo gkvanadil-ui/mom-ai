@@ -119,34 +119,72 @@ with tabs[0]:
                     st.rerun()
 
 # --- Tab 2: 사진보정 (AI 자율 보정) ---
+따님, 사진 보정 기능에서 AI가 분석한 수치를 사진에 적용할 때 발생하던 오류를 잡고, **"상품 판매용으로 가장 적합한 보정"**을 수행하도록 프롬프트를 훨씬 더 똑똑하게 수정했습니다.
+
+단순히 밝게 하는 것이 아니라, 상품의 질감과 색감을 살리면서 화사하게 만드는 전문 보정 알고리즘을 프롬프트에 담았습니다. 또한 이미지 생성이 아닌, 순수하게 PIL(Pillow) 라이브러리를 제어하는 코드로만 구성했습니다.
+
+✅ [Ver 4.9] AI 상품 사진 전문 보정 로직 수정본
+Python
+
+# --- Tab 2: 사진보정 (AI 자율 분석 및 상품 사진 최적화) ---
 with tabs[1]:
-    st.subheader("📸 AI 자율 분석 보정")
+    st.subheader("📸 AI 상품 사진 전문 보정")
+    st.write("AI가 사진의 상태를 분석하여 판매용 상품 사진에 가장 적합한 화사함과 선명도를 찾아드려요.")
+    
     uploaded_files = st.file_uploader("보정할 사진 선택", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-    if uploaded_files and api_key and st.button("🚀 AI 보정 시작"):
+    
+    if uploaded_files and api_key and st.button("🚀 AI 자동 보정 시작"):
+        def encode_image(image_bytes): return base64.b64encode(image_bytes).decode('utf-8')
         client = openai.OpenAI(api_key=api_key)
+        
         for idx, file in enumerate(uploaded_files):
             img_bytes = file.getvalue()
             try:
-                b64_img = base64.b64encode(img_bytes).decode('utf-8')
+                # 1. AI 시각 분석 프롬프트 (상품 사진 최적화)
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "user", "content": [
-                        {"type": "text", "text": '사진을 분석해 {"b":밝기, "c":대비, "s":채도, "sh":선명도} JSON 출력.'},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                        {"type": "text", "text": """이 사진은 온라인 쇼핑몰에 올릴 '핸드메이드 작품' 사진입니다. 
+                        사진을 분석하여 상품이 가장 매력적으로 보일 수 있도록 다음 4가지 보정 수치를 결정하여 JSON으로만 답하세요.
+                        
+                        [보정 가이드라인]
+                        1. 밝기(b): 상품이 화사해 보이도록. 너무 어두우면 1.25, 적당하면 1.1 정도로 설정.
+                        2. 대비(c): 상품의 입체감을 위해 선명하게. 보통 1.1 정도로 추천.
+                        3. 채도(s): 핸드메이드의 따뜻한 색감을 살리도록. 창백하면 1.15, 너무 진하면 1.0.
+                        4. 선명도(sh): 원단의 질감이나 뜨개 조직이 잘 보이도록. 1.5~2.0 사이로 설정.
+                        
+                        출력 형식: {"b": 밝기수치, "c": 대비수치, "s": 채도수치, "sh": 선명도수치}"""},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encode_image(img_bytes)}"}}
                     ]}],
                     response_format={ "type": "json_object" }
                 )
+                
+                # 2. 분석 수치 파싱
                 res = json.loads(response.choices[0].message.content)
+                
+                # 3. 이미지 처리 (오류 방지를 위한 프로세스)
                 img = Image.open(io.BytesIO(img_bytes))
-                img = ImageOps.exif_transpose(img)
-                img = ImageEnhance.Brightness(img).enhance(res.get('b', 1.1))
-                img = ImageEnhance.Contrast(img).enhance(res.get('c', 1.0))
-                img = ImageEnhance.Color(img).enhance(res.get('s', 1.0))
-                img = ImageEnhance.Sharpness(img).enhance(res.get('sh', 1.2))
-                st.image(img, caption=f"보정 완료 {idx+1}")
-                buf = io.BytesIO(); img.save(buf, format="JPEG")
-                st.download_button(f"📥 {idx+1}번 사진 저장", buf.getvalue(), f"mog_{idx+1}.jpg")
-            except: st.error("보정 실패")
+                img = ImageOps.exif_transpose(img) # 사진 돌아감 방지
+                
+                if img.mode == 'RGBA': # 투명 배경 파일 대응
+                    img = img.convert('RGB')
+                
+                # 수치 적용 (순서: 밝기 -> 대비 -> 색감 -> 선명도)
+                img = ImageEnhance.Brightness(img).enhance(res.get('b', 1.1)) # 밝기
+                img = ImageEnhance.Contrast(img).enhance(res.get('c', 1.05)) # 대비
+                img = ImageEnhance.Color(img).enhance(res.get('s', 1.1))    # 채도
+                img = ImageEnhance.Sharpness(img).enhance(res.get('sh', 1.5)) # 선명도
+                
+                # 4. 결과 출력
+                st.image(img, caption=f"✨ {idx+1}번 상품 최적화 보정 완료")
+                
+                # 다운로드 버튼
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=95) # 고화질 저장
+                st.download_button(f"📥 {idx+1}번 보정 사진 저장", buf.getvalue(), f"mog_product_{idx+1}.jpg", mime="image/jpeg")
+                
+            except Exception as e:
+                st.error(f"{idx+1}번 사진을 처리하는 중 오류가 발생했어요. 다시 시도해 보셔요🌸")
 
 # --- Tab 3: 캔바 & 에픽 ---
 with tabs[2]:
