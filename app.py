@@ -2,74 +2,84 @@ import streamlit as st
 from rembg import remove
 from PIL import Image
 import io
-import requests
+import openai
+import base64
 
-# 앱 설정
-st.set_page_config(page_title="엄마의 프리미엄 AI 비서")
-st.title("☕ 카페 설정샷 자동 완성")
-st.write("작품 사진만 올리세요. AI가 카페 테이블로 옮겨드립니다!")
+# 1. 사이트 기본 설정
+st.set_page_config(page_title="엄마의 프리미엄 AI 스튜디오")
+st.title("🎨 AI 이미지 생성 스튜디오")
+st.write("사진을 올리면 AI가 세상에 없던 고급 배경을 그려서 합성해드려요.")
 
-# 고급 배경 이미지 리스트 (무료 이미지 주소)
-# 1. 따뜻한 원목 테이블, 2. 하얀 대리석 테이블
-BG_URLS = {
-    "따뜻한 나무 테이블": "https://images.unsplash.com/photo-1517705008128-361805f42e86?q=80&w=1000&auto=format&fit=crop",
-    "깔끔한 화이트 대리석": "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?q=80&w=1000&auto=format&fit=crop"
-}
+# 사이드바에서 설정
+st.sidebar.header("🔑 설정")
+api_key = st.sidebar.text_input("OpenAI API Key를 넣어주세요", type="password")
+author_name = st.sidebar.text_input("작가 이름", value="엄마작가")
+
+# 배경 컨셉 선택
+bg_concept = st.selectbox("어떤 분위기로 만들까요?", 
+    ["햇살이 비치는 따뜻한 우드 카페", "세련된 현대식 대리석 쇼룸", "꽃이 가득한 정원 테이블", "포근한 침실 협탁 위"])
 
 st.divider()
 
-# --- 설정: 작가 이름 및 배경 선택 ---
-st.sidebar.header("⚙️ 연출 설정")
-author_name = st.sidebar.text_input("작가 이름", value="엄마작가")
-selected_bg = st.sidebar.selectbox("배경 스타일 선택", list(BG_URLS.keys()))
-
-# --- 1단계: 카페 설정샷 만들기 ---
-st.header("📸 1. 사진 변형하기")
-uploaded_file = st.file_uploader("작품 사진을 선택하세요", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("작품 사진을 올려주세요", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
+    # API 키가 있는지 확인
+    if not api_key:
+        st.warning("왼쪽 메뉴에 API Key를 먼저 넣어주세요!")
+        st.stop()
+    
+    openai.api_key = api_key
+    
+    # 원본 보여주기
     img = Image.open(uploaded_file)
     st.image(img, caption="원본 사진", width=300)
-    
-    if st.button("✨ 카페 설정샷으로 변신!"):
-        with st.spinner("배경을 바꾸고 소품을 배치 중입니다..."):
-            # 1. 엄마 사진 배경 제거
-            input_bytes = uploaded_file.getvalue()
-            subject_bytes = remove(input_bytes)
-            subject = Image.open(io.BytesIO(subject_bytes)).convert("RGBA")
-            
-            # 2. 선택한 카페 배경 불러오기
-            response = requests.get(BG_URLS[selected_bg])
-            background = Image.open(io.BytesIO(response.content)).convert("RGBA")
-            
-            # 3. 배경 크기에 맞게 작품 크기 조절 (배경의 약 50% 크기로)
-            bg_w, bg_h = background.size
-            ratio = (bg_w * 0.5) / subject.width
-            new_size = (int(subject.width * ratio), int(subject.height * ratio))
-            subject = subject.resize(new_size, Image.LANCZOS)
-            
-            # 4. 배경 정중앙에 배치 (약간 아래쪽으로)
-            paste_x = (bg_w - subject.width) // 2
-            paste_y = (bg_h - subject.height) // 2 + 100
-            
-            # 합성
-            background.paste(subject, (paste_x, paste_y), subject)
-            
-            # 5. 작가 이름표 넣기 (이미지 하단)
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(background)
-            text = f"Handmade by {author_name}"
-            draw.text((bg_w - 400, bg_h - 100), text, fill=(255, 255, 255, 150))
-            
-            final_img = background.convert("RGB")
-            st.image(final_img, caption="카페 설정샷 완성!", use_container_width=True)
-            
-            # 저장 버튼
-            buf = io.BytesIO()
-            final_img.save(buf, format="JPEG", quality=90)
-            st.download_button("📥 완성된 사진 저장하기", buf.getvalue(), "cafe_style.jpg")
+
+    if st.button("🚀 AI로 프리미엄 설정샷 생성하기"):
+        with st.spinner("AI가 배경을 그리고 있습니다... (약 15초 소요)"):
+            try:
+                # 1. 배경 제거 (제품만 남기기)
+                input_bytes = uploaded_file.getvalue()
+                subject_bytes = remove(input_bytes)
+                subject_img = Image.open(io.BytesIO(subject_bytes)).convert("RGBA")
+                
+                # 2. DALL-E 3에게 배경 생성 요청 (Edit 기능 활용 혹은 새로운 배경 생성 후 합성)
+                # 여기서는 가장 에러가 적은 '고급 배경 생성 후 합성' 방식을 사용합니다.
+                prompt = f"A professional high-quality product photography background of {bg_concept}, soft natural lighting, 8k resolution, cinematic lighting, blurred background, spacious tabletop."
+                
+                response = openai.images.generate(
+                    model="dall-e-3",
+                    prompt=prompt,
+                    size="1024x1024",
+                    quality="standard",
+                    n=1,
+                )
+                
+                bg_url = response.data[0].url
+                
+                # 생성된 배경 가져오기
+                import requests
+                bg_resp = requests.get(bg_url)
+                background = Image.open(io.BytesIO(bg_resp.content)).convert("RGBA")
+                
+                # 3. 제품 합성 (중앙 하단 배치)
+                bg_w, bg_h = background.size
+                subject_img.thumbnail((bg_w * 0.6, bg_h * 0.6)) # 제품 크기 조절
+                
+                offset = ((bg_w - subject_img.width) // 2, (bg_h - subject_img.height) // 2 + 100)
+                background.paste(subject_img, offset, subject_img)
+                
+                # 4. 결과 출력
+                final_img = background.convert("RGB")
+                st.image(final_img, caption="AI가 완성한 설정샷", use_container_width=True)
+                
+                # 저장 버튼
+                buf = io.BytesIO()
+                final_img.save(buf, format="JPEG")
+                st.download_button("📥 저장하기", buf.getvalue(), "ai_studio_photo.jpg")
+                
+            except Exception as e:
+                st.error(f"오류가 발생했어요: {e}")
 
 st.divider()
-# (글쓰기 기능은 이전과 동일하게 유지)
-st.header("✍️ 2. 상세페이지 글쓰기")
-st.write("이름과 정성을 입력하면 친절한 문구로 바꿔드려요.")
+st.info("문구 생성 기능은 아래에 그대로 있습니다. (이전과 동일)")
