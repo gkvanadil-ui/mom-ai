@@ -6,7 +6,7 @@ import base64
 import json
 
 # 1. 앱 페이지 설정
-st.set_page_config(page_title="엄마의 AI 명품 비서", layout="wide")
+st.set_page_config(page_title="사랑하는 엄마, 모그의 AI 명품 비서", layout="wide")
 
 # 사이드바 API 설정
 st.sidebar.header("⚙️ AI 설정")
