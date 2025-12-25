@@ -5,6 +5,7 @@ import io
 import openai
 import base64
 import json
+from streamlit_drawable_canvas import st_canvas  # 🖌️ 직접 그리기 도구 추가
 
 # 1. 페이지 설정
 st.set_page_config(page_title="모그 AI 비서", layout="centered")
@@ -118,7 +119,7 @@ with tabs[0]:
                     st.session_state.texts[p_key] = process_mog_ai({"name": p_key, "desc": refine_prompt})
                     st.rerun()
 
-# --- Tab 2: 사진보정 (섬세한 AI 자율 지능형 보정) ---
+# --- Tab 2: 사진보정 ---
 with tabs[1]:
     st.subheader("📸 AI 섬세한 사진 작업실")
     st.write("AI가 사진의 밝기, 색감, 질감을 아주 섬세하게 분석하여 원본보다 조금 더 화사하고 깔끔하게만 다듬어 드려요.")
@@ -137,7 +138,6 @@ with tabs[1]:
                 img_bytes = file.getvalue()
                 with st.spinner(f"{idx+1}번 사진을 조심스럽게 분석 중..."):
                     try:
-                        # AI에게 과한 보정을 금지하고 자연스러움을 강조하는 프롬프트
                         response = client.chat.completions.create(
                             model="gpt-4o",
                             messages=[{"role": "user", "content": [
@@ -158,152 +158,106 @@ with tabs[1]:
                             ]}],
                             response_format={ "type": "json_object" }
                         )
-                        
                         res = json.loads(response.choices[0].message.content)
-                        
                         img = Image.open(io.BytesIO(img_bytes))
                         img = ImageOps.exif_transpose(img)
                         if img.mode == 'RGBA': img = img.convert('RGB')
                         
-                        # AI의 판단 결과를 적용 (기본값 1.0으로 안전장치)
                         img = ImageEnhance.Brightness(img).enhance(res.get('brightness', 1.0))
                         img = ImageEnhance.Contrast(img).enhance(res.get('contrast', 1.0))
                         img = ImageEnhance.Color(img).enhance(res.get('saturation', 1.0))
                         img = ImageEnhance.Sharpness(img).enhance(res.get('sharpness', 1.0))
                         
                         st.image(img, caption=f"✅ {idx+1}번 자연스러운 보정 완료")
-                        
                         buf = io.BytesIO()
                         img.save(buf, format="JPEG", quality=95)
                         st.download_button(f"📥 {idx+1}번 사진 저장", buf.getvalue(), f"mog_natural_{idx+1}.jpg", key=f"dl_{idx}")
-                    
                     except:
                         st.error(f"{idx+1}번 보정 실패🌸")
-                        
-      # --- 기능 2: 얼굴 모자이크 (시각 인지 정밀화 버전) ---
+
+        # --- 기능 2: 얼굴 모자이크 (AI 정밀 감지) ---
         if c2.button("👤 정밀 얼굴 모자이크 시작"):
             client = openai.OpenAI(api_key=api_key)
             def encode_image(image_bytes): return base64.b64encode(image_bytes).decode('utf-8')
 
             for idx, file in enumerate(uploaded_files):
                 img_bytes = file.getvalue()
-                
-                # 원본 회전 방지 및 크기 확인
                 raw_img = Image.open(io.BytesIO(img_bytes))
                 raw_img = ImageOps.exif_transpose(raw_img)
                 w, h = raw_img.size
 
-                with st.spinner(f"{idx+1}번 사진에서 얼굴을 정밀 탐색 중..."):
+                with st.spinner(f"{idx+1}번 사진에서 얼굴 탐색 중..."):
                     try:
-                        # AI에게 더 엄격하고 구체적인 탐색 지시
                         response = client.chat.completions.create(
                             model="gpt-4o",
                             messages=[{"role": "user", "content": [
-                                {"type": "text", "text": f"""이 이미지(가로 {w}px, 세로 {h}px)에서 '실제 사람의 얼굴'만 모두 찾으세요.
-                                
-                                [규칙]
-                                1. 눈, 코, 입이 뚜렷한 사람의 얼굴 영역을 사각형(Bounding Box)으로 지정하세요.
-                                2. 배경 사물이나 옷 무늬를 얼굴로 착각하지 마세요.
-                                3. 반드시 0~1000 사이의 상대 좌표 [ymin, xmin, ymax, xmax] 리스트로 답하세요.
-                                
-                                형식: {{"faces": [[ymin, xmin, ymax, xmax], ...]}}"""},
+                                {"type": "text", "text": f"이 이미지(가로 {w}px, 세로 {h}px)에서 실제 사람의 얼굴만 찾아 [ymin, xmin, ymax, xmax] (0~1000 기준) 리스트로 답하세요. JSON 형식: {{'faces': [[...]]}}"},
                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encode_image(img_bytes)}"}}
                             ]}],
                             response_format={ "type": "json_object" }
                         )
-                        
                         res = json.loads(response.choices[0].message.content)
                         faces = res.get('faces', [])
-                        
                         img = raw_img.copy()
-                        
                         if not faces:
-                            st.info(f"💡 {idx+1}번 사진은 가릴 얼굴을 찾지 못했어요. (사진이 너무 멀거나 흐릴 수 있습니다)")
+                            st.info(f"💡 {idx+1}번 사진은 가릴 얼굴을 찾지 못했어요.")
                         else:
                             for face in faces:
-                                # AI가 준 0~1000 좌표를 실제 픽셀로 환산
                                 ymin, xmin, ymax, xmax = face
-                                
-                                left = (xmin / 1000) * w
-                                top = (ymin / 1000) * h
-                                right = (xmax / 1000) * w
-                                bottom = (ymax / 1000) * h
-
-                                # 🔍 얼굴을 놓치지 않게 영역을 20% 더 넓게 잡음 (중요!)
-                                width_ext = (right - left) * 0.2
-                                height_ext = (bottom - top) * 0.2
-                                
-                                left = max(0, left - width_ext)
-                                top = max(0, top - height_ext)
-                                right = min(w, right + width_ext)
-                                bottom = min(h, bottom + height_ext)
-
-                                # 모자이크 처리 (픽셀화 강도 높임)
-                                face_area = img.crop((int(left), int(top), int(right), int(bottom)))
-                                # 축소 배율을 높여 확실하게 가림
-                                mosaic_w = max(1, int(face_area.width / 25))
-                                mosaic_h = max(1, int(face_area.height / 25))
-                                face_area = face_area.resize((mosaic_w, mosaic_h), resample=Image.BILINEAR)
-                                face_area = face_area.resize((int(right-left), int(bottom-top)), resample=Image.NEAREST)
-                                img.paste(face_area, (int(left), int(top)))
-                            
+                                left, top, right, bottom = (xmin/1000)*w, (ymin/1000)*h, (xmax/1000)*w, (ymax/1000)*h
+                                # 영역 확장 및 모자이크
+                                face_area = img.crop((int(left-10), int(top-10), int(right+10), int(bottom+10)))
+                                mosaic = face_area.resize((15, 15), resample=Image.BILINEAR).resize(face_area.size, resample=Image.NEAREST)
+                                img.paste(mosaic, (int(left-10), int(top-10)))
                             st.image(img, caption=f"👤 {idx+1}번 얼굴 보호 완료")
-                            
-                            buf = io.BytesIO()
-                            img.save(buf, format="JPEG", quality=95)
+                            buf = io.BytesIO(); img.save(buf, format="JPEG", quality=95)
                             st.download_button(f"📥 {idx+1}번 저장하기", buf.getvalue(), f"mog_face_{idx+1}.jpg", key=f"btn_face_{idx}")
-                            
-                    except Exception as e:
-                        st.error(f"{idx+1}번 사진 처리 중 오류가 발생했어요. 다시 한번만 시도해 주세요🌸")
+                    except:
+                        st.error(f"{idx+1}번 처리 오류🌸")
 
+    # --- ✨ 기능 3: 직접 그려서 모자이크 (추가된 부분) ---
+    st.divider()
+    st.subheader("🎨 직접 그려서 모자이크 하기")
+    st.write("AI가 얼굴을 못 찾는다면, 가리고 싶은 부분을 붓으로 슥슥 칠해보세요.")
+    
+    manual_file = st.file_uploader("그림 그릴 사진 1장 선택", type=["jpg", "jpeg", "png"], key="manual_up")
+    if manual_file:
+        bg = Image.open(manual_file)
+        bg = ImageOps.exif_transpose(bg)
+        canvas_width = 600
+        canvas_height = int(bg.height * (canvas_width / bg.width))
+        
+        stroke_width = st.slider("붓 크기", 5, 100, 25)
+        canvas_result = st_canvas(
+            fill_color="rgba(0, 0, 0, 1)", stroke_width=stroke_width,
+            stroke_color="rgba(0, 0, 0, 1)", background_image=bg,
+            height=canvas_height, width=canvas_width, drawing_mode="freedraw", key="manual_canvas"
+        )
+        
+        if st.button("🚀 칠한 부분 모자이크 실행"):
+            if canvas_result.image_data is not None:
+                mask = canvas_result.image_data[:, :, 3]
+                mask_img = Image.fromarray(mask).resize(bg.size, resample=Image.NEAREST)
+                mosaic_bg = bg.resize((20, 20), resample=Image.BILINEAR).resize(bg.size, resample=Image.NEAREST)
+                final_img = Image.composite(mosaic_bg, bg, mask_img)
+                st.image(final_img, caption="✨ 수동 모자이크 완료!")
+                buf = io.BytesIO(); final_img.save(buf, format="JPEG")
+                st.download_button("📥 수동 모자이크 사진 저장", buf.getvalue(), "manual_mog.jpg")
 
-# --- Tab 3: 캔바 & 에픽 (더 자세하고 친절한 설명) ---
+# --- Tab 3: 캔바 & 에픽 ---
 with tabs[2]:
     st.subheader("🎨 예쁜 상세페이지와 영상 만들기")
     st.write("작품 사진을 예쁜 배경에 넣거나, 음악이 흐르는 홍보 영상을 만드는 방법을 알려드릴게요. 🌸")
-    
-    # --- 캔바(Canva) 섹션 ---
     st.markdown("### 1️⃣ 사진을 잡지처럼! '캔바(Canva)'")
-    st.write("""
-    캔바는 **작품 사진을 넣기만 하면 멋진 잡지나 홍보지**처럼 만들어주는 앱이에요. 
-    직접 디자인하기 어려우실 때 AI가 미리 짜주는 기획안을 참고해 보세요!
-    """)
-    
     if st.button("🪄 AI가 추천하는 페이지 구성 보기"):
-        if not name: 
-            st.warning("위쪽 '1️⃣ 작품 정보'를 먼저 입력해 주시면 더 정확하게 짜드려요🌸")
+        if not name: st.warning("위쪽 '1️⃣ 작품 정보'를 먼저 입력해 주시면 더 정확하게 짜드려요🌸")
         else:
             with st.spinner("작가님을 위해 기획안을 작성 중입니다..."):
-                prompt = f"""
-                당신은 핸드메이드 전문가입니다. 50대 작가님이 이해하기 쉽게 {name} 작품의 상세페이지 기획안을 써주세요.
-                - 말투는 다정하게 (~이지요^^, ~해요)
-                - 1페이지부터 5페이지까지 각 페이지에 어떤 사진을 넣고 어떤 글을 쓸지 텍스트로만 설명하세요.
-                - 복잡한 용어는 피해주세요.
-                """
-                st.info(process_mog_ai("상세페이지 기획", prompt))
-
+                prompt = f"핸드메이드 전문가로서 {name} 작품의 상세페이지 5장 구성안을 다정하게 써줘."
+                st.info(process_mog_ai({"name": "상세페이지 기획", "desc": prompt}))
     st.link_button("✨ 캔바 앱 바로가기", "https://www.canva.com/templates/?query=상세페이지")
-    st.caption("💡 팁: 캔바에서 '상세페이지'라고 검색하면 예쁜 양식이 아주 많이 나와요.")
-
     st.divider()
-
-    # --- 에픽(EPIK) 섹션 ---
     st.markdown("### 2️⃣ 음악이 흐르는 영상 만들기! '에픽(EPIK)'")
-    st.write("작품 사진 여러 장으로 **음악이 나오는 멋진 홍보 영상**을 1분 만에 만들 수 있어요.")
-    
     with st.expander("📺 천천히 따라해보세요 (에픽 사용법)", expanded=True):
-        st.markdown("""
-        **1. 앱 설치 및 실행** 스마트폰에서 **[EPIK]** 또는 **[에픽]** 앱을 찾아 눌러주세요.
-        
-        **2. [템플릿] 메뉴 누르기** 앱 하단에 있는 **[템플릿]** 단어를 눌러보세요. 이미 만들어진 예쁜 영상 양식들이 보여요.
-        
-        **3. '감성' 또는 '뜨개' 검색** 돋보기 모양 검색창에 **'감성'**, **'봄'**, 또는 **'핸드메이드'**라고 검색하면 우리 작품과 어울리는 예쁜 영상틀이 나옵니다.
-        
-        **4. 내 사진 넣기** 맘에 드는 영상틀을 골라 **[사용하기]**를 누른 뒤, 위에서 보정한 예쁜 사진들을 선택해 주세요.
-        
-        **5. 저장하고 자랑하기** 오른쪽 위 **[저장]**을 누르면 끝! 이제 갤러리(사진첩)에 가보시면 음악이 나오는 영상이 저장되어 있을 거예요. 🌸
-        """)
-        st.info("💡 인스타그램이나 아이디어스 소식에 올리면 손님들이 정말 좋아하신답니다^^")
-
-    st.divider()
+        st.markdown("1. 앱 실행 후 [템플릿] 누르기\n2. '감성' 검색\n3. 사진 넣고 저장! 🌸")
     st.write("<p style='text-align: center; color: #7d6e63;'>오늘도 작가님의 따뜻한 손길을 응원합니다. 화이팅! 🕯️</p>", unsafe_allow_html=True)
