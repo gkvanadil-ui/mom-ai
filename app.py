@@ -22,7 +22,7 @@ st.write("'세상에 단 하나뿐인 온기'를 전하는 모그 작가님의 �
 
 st.divider()
 
-# --- 1. 사진 일괄 AI 지능형 보정 ---
+# --- 1. 사진 일괄 AI 지능형 보정 (기존 기능 유지) ---
 st.header("📸 1. 사진 한 번에 보정하기")
 uploaded_files = st.file_uploader("보정할 사진들을 선택하세요", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
@@ -82,19 +82,19 @@ def generate_text(platform_type, specific_prompt):
         return None
 
     client = openai.OpenAI(api_key=api_key)
-    # [지침 강화] 카피라이터 소개 제거 및 작가 직접 화법 강조
     full_prompt = f"""
-    당신은 핸드메이드 브랜드 '모그(Mog)'를 운영하는 작가 자신입니다. 
-    당신이 직접 고객에게 이야기하는 형식으로 [{platform_type}] 판매글을 작성하세요.
+    당신은 브랜드 '모그(Mog)'의 작가 본인입니다. 직접 고객에게 건네는 말투로 [{platform_type}] 판매글을 작성하세요.
 
-    [절대 엄수 지침]
-    - 절대로 본인을 '카피라이터'나 'AI 비서'라고 소개하지 마세요. 
-    - 글의 시작은 작가로서의 인사("안녕하세요, 모그입니다", "날씨가 참 좋지요^^" 등)로 시작하세요.
-    - 별표 기호 '**'를 절대로 사용하지 마세요. (굵은 글씨 금지)
-    - 강조가 필요하면 이모지나 줄바꿈을 활용하세요.
-    - 엄마 작가님이 그대로 복사해서 붙여넣기 할 수 있는 순수한 텍스트만 출력하세요.
+    [핵심 어투 지침]
+    - 말투: 밝고 다정하며 정감이 가는 어른스러운 말투를 사용하세요. (예: ~이지요^^, ~했답니다, ~좋아요)
+    - 주의: 'ok👭' 같은 특정 예시 문구를 그대로 반복하지 마세요. 상황에 맞는 자연스러운 이모지를 사용하세요.
+    - 본인을 '모그'라고 지칭하고, 제작 과정의 즐거움과 원단의 퀄리티를 강조하세요.
 
-    [작가 정보] 브랜드명: 모그(Mog) / 어투: "~이지요^^", "~만들어봤어요", "ok👭" 등 밝고 다정함.
+    [출력 형식 지침]
+    - 강조를 위한 별표 기호(**)를 절대 사용하지 마세요. 굵은 글씨 금지입니다.
+    - 본인을 카피라이터나 AI라고 소개하는 서론을 절대 넣지 마세요. 바로 본론(인사말)으로 시작하세요.
+    - 복사해서 바로 붙여넣을 수 있는 깨끗한 일반 텍스트로만 답변하세요.
+
     [데이터 정보] 제품명: {name} / 특징: {keys} / 소재: {mat} / 사이즈: {size} / 제작진심: {process} / 포장: {care}
 
     {specific_prompt}
@@ -106,8 +106,9 @@ def generate_text(platform_type, specific_prompt):
                 model="gpt-4o",
                 messages=[{"role": "user", "content": full_prompt}]
             )
+            # 1. 별표(**) 제거, 2. AI의 불필요한 서론 제거 로직
             clean_text = response.choices[0].message.content.replace("**", "")
-            return clean_text
+            return clean_text.strip()
         except Exception as e:
             st.error(f"오류 발생: {e}")
             return None
@@ -115,7 +116,7 @@ def generate_text(platform_type, specific_prompt):
 with tab1:
     st.subheader("인스타그램 스타일 (깔끔&감성)")
     if st.button("🪄 인스타용 글 만들기"):
-        instr = "작가로서 가벼운 일상 인사를 건네며 시작하세요. 너무 길지 않게 요약하고, 매력 포인트를 해시태그와 섞어주세요. 별표 기호는 금지입니다."
+        instr = "작가로서 가벼운 일상 인사를 건네며 시작하세요. 너무 길지 않게 요약하고, 매력 포인트를 해시태그와 섞어주세요. 특정 예시 문구(ok 등)를 그대로 쓰지 말고 작가님만의 감성으로 새로 쓰세요."
         result = generate_text("인스타그램", instr)
         if result:
             st.text_area("인스타 결과", value=result, height=400)
@@ -124,10 +125,9 @@ with tab2:
     st.subheader("아이디어스 스타일 (한 줄씩 정성 상세글)")
     if st.button("🪄 아이디어스용 글 만들기"):
         instr = """
-        - 모든 문장이 끝나면 반드시 줄바꿈을 하여 한 줄에 한 문장만 나오게 하세요.
-        - 본인을 '모그'라고 지칭하며 제작 스토리와 정성을 한 줄씩 다정하게 풀어내세요.
+        - 모든 문장이 끝나면 반드시 줄바꿈을 하여 '한 줄에 한 문장'만 나오게 하세요.
         - 문단 사이에는 빈 줄을 넣어 여유 있게 구성하세요.
-        - 작가님의 샘플 말투를 100% 반영하고, 별표 기호는 절대 사용 금지입니다.
+        - 작가님의 제작 스토리와 정성을 다정하게 풀어내세요. 특정 예시 단어를 반복하지 마세요.
         """
         result = generate_text("아이디어스", instr)
         if result:
@@ -136,7 +136,7 @@ with tab2:
 with tab3:
     st.subheader("스마트스토어 스타일 (상세 정보 가이드)")
     if st.button("🪄 스마트스토어용 글 만들기"):
-        instr = "구분선(⸻)과 불렛 포인트를 사용하세요. 작가로서 정보를 상세하고 친절하게 정리하되 별표 기호는 절대 사용하지 마세요."
+        instr = "구분선(⸻)과 불렛 포인트를 사용하세요. 작가로서 정보를 상세하고 친절하게 정리하세요. 제목에 별표 사용은 금지입니다."
         result = generate_text("스마트스토어", instr)
         if result:
             st.text_area("스토어 결과", value=result, height=700)
