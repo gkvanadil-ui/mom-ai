@@ -10,7 +10,7 @@ import base64
 # 1. 페이지 설정
 st.set_page_config(page_title="모그 AI 비서", layout="wide", page_icon="🌸")
 
-# --- ✨ UI 스타일: 엄마를 위한 디자인 (요약/축약 절대 금지) ---
+# --- ✨ UI 스타일: 엄마를 위한 디자인 (절대 요약/축약 없음) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
@@ -26,35 +26,37 @@ st.markdown("""
 # 2. 필수 설정
 api_key = st.secrets.get("OPENAI_API_KEY")
 
-# 구글 시트 인증 (가장 확실한 경로 탐색 버전)
+# 구글 시트 인증 (가장 원초적인 경로 탐색 버전)
 def get_gspread_client():
     try:
-        # Secrets의 [connections.gsheets] 섹션을 가져옵니다.
-        if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-            gs = st.secrets["connections"]["gsheets"]
-        elif "gsheets" in st.secrets:
-            gs = st.secrets["gsheets"]
-        else:
-            raise KeyError("Streamlit Secrets에서 'connections.gsheets' 섹션을 찾을 수 없습니다.")
+        # 💡 따님, Secrets 내부에서 계층 상관없이 필요한 값들을 수동으로 다 찾아냅니다.
+        def find_secret(key):
+            # 1. connections.gsheets 하위 탐색
+            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                return st.secrets["connections"]["gsheets"].get(key)
+            # 2. gsheets 하위 탐색
+            if "gsheets" in st.secrets:
+                return st.secrets["gsheets"].get(key)
+            # 3. 루트 레벨 탐색
+            return st.secrets.get(key)
 
-        # 인증에 필요한 필수 필드들을 추출합니다.
         creds_dict = {
-            "type": gs.get("type"),
-            "project_id": gs.get("project_id"),
-            "private_key_id": gs.get("private_key_id"),
-            "private_key": gs.get("private_key").replace("\\n", "\n") if gs.get("private_key") else None,
-            "client_email": gs.get("client_email"),
-            "client_id": gs.get("client_id"),
-            "auth_uri": gs.get("auth_uri"),
-            "token_uri": gs.get("token_uri"),
-            "auth_provider_x509_cert_url": gs.get("auth_provider_x509_cert_url"),
-            "client_x509_cert_url": gs.get("client_x509_cert_url")
+            "type": find_secret("type"),
+            "project_id": find_secret("project_id"),
+            "private_key_id": find_secret("private_key_id"),
+            "private_key": find_secret("private_key").replace("\\n", "\n") if find_secret("private_key") else None,
+            "client_email": find_secret("client_email"),
+            "client_id": find_secret("client_id"),
+            "auth_uri": find_secret("auth_uri"),
+            "token_uri": find_secret("token_uri"),
+            "auth_provider_x509_cert_url": find_secret("auth_provider_x509_cert_url"),
+            "client_x509_cert_url": find_secret("client_x509_cert_url")
         }
 
-        # 인증 데이터 유효성 검사
-        missing_fields = [k for k, v in creds_dict.items() if not v]
-        if missing_fields:
-            raise ValueError(f"다음 필드 정보가 Secrets에 없습니다: {', '.join(missing_fields)}")
+        # 인증 데이터 유효성 검사 (어떤 필드가 누락되었는지 정확히 표시)
+        missing = [k for k, v in creds_dict.items() if not v]
+        if missing:
+            raise ValueError(f"Secrets에서 다음 정보를 찾을 수 없습니다: {', '.join(missing)}")
 
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
@@ -101,7 +103,6 @@ def ask_mog_ai(platform, user_in="", feedback=""):
     감성 이모지: 꽃(🌸, 🌻), 구름(☁️), 반짝이(✨)를 과하지 않게 섞어서 사용.
     """
     
-    # 2️⃣ [플랫폼별] 특화 프롬프트 로직
     if platform == "인스타그램":
         system_p = f"{base_style} [📸 인스타그램 (감성 일기 모드)] 지침: 사진을 보자마자 마음이 따뜻해지는 문구로 시작할 것. 구성: [첫 줄 감성 문구] + [작가님의 제작 일기] + [작품 상세 정보] + [다정한 인사] + [해시태그]. 특징: 줄바꿈을 아주 넉넉히 해서 가독성을 높이고, 해시태그는 10개 내외로 달기."
     elif platform == "아이디어스":
@@ -118,10 +119,8 @@ def ask_mog_ai(platform, user_in="", feedback=""):
         u_content = f"정보: {info} / {user_in}"
 
     res = client.chat.completions.create(model="gpt-4o", messages=[{"role":"system","content":system_p},{"role":"user","content":u_content}])
-    
-    # 💡 따님의 팁 적용
-    final_text = res.choices[0].message.content
-    return final_text.replace("**", "").replace("*", "").strip()
+    # 💡 따님의 팁 적용: 마크다운 기호 제거
+    return res.choices[0].message.content.replace("**", "").replace("*", "").strip()
 
 # --- 3. 메인 화면 ---
 st.title("🌸 모그 작가님 AI 비서 🌸")
@@ -140,13 +139,17 @@ st.session_state.m_det = st.text_area("✨ 정성 포인트와 설명", value=st
 if st.button("💾 이 작품 정보 창고에 저장하기"):
     try:
         gc = get_gspread_client()
-        # Secrets의 connections.gsheets 섹션 하위 spreadsheet 항목에서 URL을 가져옵니다.
-        if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-            sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        elif "gsheets" in st.secrets:
-            sheet_url = st.secrets["gsheets"]["spreadsheet"]
-        else:
-            sheet_url = st.secrets["spreadsheet"]
+        # 💡 따님, Secrets 내부에서 'spreadsheet'라는 이름의 URL을 찾아옵니다.
+        def find_url():
+            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                return st.secrets["connections"]["gsheets"].get("spreadsheet")
+            if "gsheets" in st.secrets:
+                return st.secrets["gsheets"].get("spreadsheet")
+            return st.secrets.get("spreadsheet")
+            
+        sheet_url = find_url()
+        if not sheet_url:
+            raise ValueError("Secrets에서 'spreadsheet' (시트 URL) 항목을 찾을 수 없습니다.")
             
         sheet = gc.open_by_url(sheet_url).sheet1
         sheet.append_row([
@@ -181,7 +184,7 @@ with tabs[0]: # 판매글 쓰기 및 수정 요청
                     st.session_state.texts[k] = ask_mog_ai(k, user_in=v, feedback=feed)
                     st.rerun()
 
-with tabs[1]: # 📸 AI 자동 사진 보정
+with tabs[1]: # 📸 AI 자동 사진 보정 (3단계 보정 유지)
     st.header("📸 AI 자동 사진 보정")
     up_img = st.file_uploader("사진을 올려주시면 AI가 화사하게 직접 보정해드릴게요 🌸", type=["jpg", "png", "jpeg"])
     if up_img and st.button("✨ 보정 시작하기"):
@@ -193,7 +196,7 @@ with tabs[1]: # 📸 AI 자동 사진 보정
             buf = io.BytesIO(); e_img.save(buf, format="JPEG")
             st.download_button("📥 저장", buf.getvalue(), "mogs_fixed.jpg", "image/jpeg")
 
-with tabs[2]: # 💬 고민 상담소 (별개 탭 분리)
+with tabs[2]: # 💬 고민 상담소 (별개 탭 분리 완료)
     st.header("💬 작가님 고민 상담소")
     for m in st.session_state.chat_log:
         with st.chat_message(m["role"]): st.write(m["content"])
@@ -206,13 +209,14 @@ with tabs[3]: # 📂 작품 창고 불러오기
     st.header("📂 나의 저장된 작품들")
     try:
         gc = get_gspread_client()
-        if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-            sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        elif "gsheets" in st.secrets:
-            sheet_url = st.secrets["gsheets"]["spreadsheet"]
-        else:
-            sheet_url = st.secrets["spreadsheet"]
+        def find_url():
+            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                return st.secrets["connections"]["gsheets"].get("spreadsheet")
+            if "gsheets" in st.secrets:
+                return st.secrets["gsheets"].get("spreadsheet")
+            return st.secrets.get("spreadsheet")
             
+        sheet_url = find_url()
         sheet = gc.open_by_url(sheet_url).sheet1
         data = sheet.get_all_records()
         for i, r in enumerate(data):
