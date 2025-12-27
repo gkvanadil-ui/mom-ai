@@ -26,27 +26,26 @@ st.markdown("""
 # 2. 필수 설정
 api_key = st.secrets.get("OPENAI_API_KEY")
 
-# 구글 시트 인증 (Secrets 경로 오류 수정 버전)
+# 구글 시트 인증 (경로 오류 완벽 해결 버전)
 def get_gspread_client():
-    # 💡 따님, 여기서 st.secrets["connections"]["gsheets"] 경로를 명확히 지정했습니다.
-    gs_secrets = st.secrets["connections"]["gsheets"]
+    # 💡 따님, st.secrets["connections"]["gsheets"]의 각 항목에 직접 접근합니다.
     creds_dict = {
-        "type": gs_secrets["type"],
-        "project_id": gs_secrets["project_id"],
-        "private_key_id": gs_secrets["private_key_id"],
-        "private_key": gs_secrets["private_key"],
-        "client_email": gs_secrets["client_email"],
-        "client_id": gs_secrets["client_id"],
-        "auth_uri": gs_secrets["auth_uri"],
-        "token_uri": gs_secrets["token_uri"],
-        "auth_provider_x509_cert_url": gs_secrets["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": gs_secrets["client_x509_cert_url"]
+        "type": st.secrets.connections.gsheets.get("type"),
+        "project_id": st.secrets.connections.gsheets.get("project_id"),
+        "private_key_id": st.secrets.connections.gsheets.get("private_key_id"),
+        "private_key": st.secrets.connections.gsheets.get("private_key"),
+        "client_email": st.secrets.connections.gsheets.get("client_email"),
+        "client_id": st.secrets.connections.gsheets.get("client_id"),
+        "auth_uri": st.secrets.connections.gsheets.get("auth_uri"),
+        "token_uri": st.secrets.connections.gsheets.get("token_uri"),
+        "auth_provider_x509_cert_url": st.secrets.connections.gsheets.get("auth_provider_x509_cert_url"),
+        "client_x509_cert_url": st.secrets.connections.gsheets.get("client_x509_cert_url")
     }
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     return gspread.authorize(creds)
 
-# 세션 상태 초기화
+# 세션 상태 초기화 (데이터 보존)
 for key in ['texts', 'chat_log', 'm_name', 'm_mat', 'm_per', 'm_size', 'm_det']:
     if key not in st.session_state:
         if key == 'texts': st.session_state[key] = {"인스타": "", "아이디어스": "", "스토어": ""}
@@ -78,21 +77,23 @@ def ask_mog_ai(platform, user_in="", feedback=""):
     client = openai.OpenAI(api_key=api_key)
     
     system_p = """
+    따님, 그동안 우리가 함께 공들여 만든 '모그(Mog) 작가님'만을 위한 전용 어투 로직입니다.
+    
     1️⃣ [공통] 모그 작가님 기본 어투 규칙
     정체성: 50대 여성 핸드메이드 작가의 다정하고 따뜻한 마음.
     대표 어미: ~이지요^^, ~해요, ~좋아요, ~보내드려요 등 부드러운 말투.
-    특수기호 금지: 별표(*)나 볼드체(**) 같은 마크다운 기호는 절대 사용 금지.
+    특수기호 금지: 별표(*)나 볼드체(**) 같은 마크다운 기호는 절대 사용 금지 (엄마가 보기 편하도록!).
     감성 이모지: 꽃(🌸, 🌻), 구름(☁️), 반짝이(✨)를 과하지 않게 섞어서 사용.
     """
     
     if platform == "인스타그램":
-        system_p += "\n2️⃣ [📸 인스타그램] 지침: 감성 문구 시작, 제작 일기, 상세 정보, 해시태그 10개 내외. 줄바꿈 넉넉히."
+        system_p += "\n2️⃣ [📸 인스타그램] 감성 일기 모드. 첫 줄 감성 문구, 제작 일기, 상세 정보, 해시태그 10개 내외."
     elif platform == "아이디어스":
-        system_p += "\n2️⃣ [🎨 아이디어스] 지침: 정성 강조, '한 땀 한 땀', '밤새 고민하며' 정성 표현 필수. 짧은 문장 위주."
+        system_p += "\n2️⃣ [🎨 아이디어스] 정성 가득 모드. 매우 잦은 줄바꿈, '한 땀 한 땀', '밤새 고민하며' 정성 표현 필수."
     elif platform == "스토어":
-        system_p += "\n2️⃣ [🛍️ 스마트스토어] 지침: 구분선(⸻) 활용, 소재/사이즈 명확히 구분, 다정한 상담원 느낌."
+        system_p += "\n2️⃣ [🛍️ 스마트스토어] 친절 정보 모드. 구분선(⸻) 사용하여 소재, 사이즈, 관리법 다정하게 정리."
     elif platform == "상담":
-        system_p += "\n3️⃣ [상담소] 역할: 든든한 선배 작가, 동료로서 공감하고 실질적 도움 주기. 따뜻한 격려 필수."
+        system_p += "\n3️⃣ [상담소] 고민 상담 전용. 든든한 선배 작가로서 공감하고 실질적 도움 주기. 격려 멘트 필수."
 
     if feedback:
         u_content = f"기존 글: {user_in} / 수정 요청사항: {feedback} / 반영해서 다시 다정하게 써주셔요🌸"
@@ -116,12 +117,12 @@ with c2:
     st.session_state.m_size = st.text_input("📏 사이즈", value=st.session_state.m_size)
 st.session_state.m_det = st.text_area("✨ 정성 포인트와 설명", value=st.session_state.m_det, height=150)
 
-# [저장 오류 해결: Secrets 경로 완전 일치 방식]
+# [저장 로직: gspread 방식]
 if st.button("💾 이 작품 정보 창고에 저장하기"):
     try:
         gc = get_gspread_client()
-        # 💡 따님, 시트 주소는 Secrets의 spreadsheet 항목을 그대로 사용합니다.
-        sheet = gc.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"]).sheet1
+        # Secrets의 gsheets 하위 spreadsheet 항목에서 URL을 가져옵니다.
+        sheet = gc.open_by_url(st.secrets.connections.gsheets.spreadsheet).sheet1
         sheet.append_row([
             st.session_state.m_name, 
             st.session_state.m_mat, 
@@ -162,7 +163,7 @@ with tabs[1]: # 📸 AI 자동 사진 보정
         buf = io.BytesIO(); e_img.save(buf, format="JPEG")
         st.download_button("📥 저장", buf.getvalue(), "mogs_fixed.jpg", "image/jpeg")
 
-with tabs[2]: # 💬 고민 상담소 (별개 탭 분리)
+with tabs[2]: # 💬 고민 상담소 (별개 탭 분리 완료)
     st.header("💬 작가님 고민 상담소")
     for m in st.session_state.chat_log:
         with st.chat_message(m["role"]): st.write(m["content"])
@@ -175,7 +176,7 @@ with tabs[3]: # 📂 작품 창고 불러오기
     st.header("📂 나의 저장된 작품들")
     try:
         gc = get_gspread_client()
-        sheet = gc.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"]).sheet1
+        sheet = gc.open_by_url(st.secrets.connections.gsheets.spreadsheet).sheet1
         data = sheet.get_all_records()
         for i, r in enumerate(data):
             with st.expander(f"📦 {r.get('name', '이름 없음')}"):
