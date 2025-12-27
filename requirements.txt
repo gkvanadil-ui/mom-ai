@@ -3,3 +3,5 @@ pandas
 Pillow
 openai
 streamlit-drawable-canvas
+st-gsheets-connection
+pandas
