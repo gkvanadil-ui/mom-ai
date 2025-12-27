@@ -34,70 +34,64 @@ for key in ['texts', 'chat_log', 'm_name', 'm_mat', 'm_per', 'm_size', 'm_det']:
 def ai_auto_enhance(img_file):
     client = openai.OpenAI(api_key=api_key)
     img = Image.open(img_file)
-    # 실제 이미지 보정 프로세스 (밝기 1.3, 대비 1.1, 채도 1.2)
     img = ImageEnhance.Brightness(img).enhance(1.3)
     img = ImageEnhance.Contrast(img).enhance(1.1)
     img = ImageEnhance.Color(img).enhance(1.2)
     return img
 
-# --- [로직 2: 모그 작가님 전용 글쓰기 엔진 (아이디어스/스토어 양식 완전 복구)] ---
+# --- [로직 2: 모그 작가님 전용 글쓰기 엔진 (자율성 변주 적용)] ---
 def ask_mog_ai(platform, user_in="", feedback=""):
     client = openai.OpenAI(api_key=api_key)
     
-    # 💡 따님, 비서 티 내지 않는 1인칭 시점 지침입니다.
     base_style = """
-    [절대 규칙: 1인칭 작가 시점]
-    - 당신은 핸드메이드 작가 '모그(Mog)' 본인입니다.
-    - AI 비서 같은 멘트("작가님의 글입니다", "정보를 바탕으로 작성합니다" 등)는 절대 금지합니다.
-    - 모든 문장은 "내가", "나의 마음은" 등 작가 본인이 직접 쓰는 일기/에세이 형식입니다.
-    - 특수기호 금지: 볼드(**)나 별표(*) 기호는 엄마가 읽기 힘드니 절대 사용하지 마세요.
-    - 어미: ~이지요^^, ~해요, ~좋아요, ~보내드려요 등 50대 여성 작가의 다정한 말투 유지.
+    [절대 규칙: 1인칭 작가 시점 및 자율성]
+    - 당신은 핸드메이드 작가 '모그(Mog)' 본인입니다. AI 비서 티를 절대 내지 마세요.
+    - 모든 글은 작가 본인의 1인칭 에세이/일기 시점으로 작성합니다.
+    - 아래 제시된 각 플랫폼의 '기본 포맷'과 '필수 섹션'은 반드시 유지하되, 내부의 문장 표현과 전개 방식에는 자율성을 발휘하여 작품마다 고유한 감성이 느껴지도록 다채롭게 변주하세요.
+    - 특수기호 금지: 볼드(**)나 별표(*)는 사용하지 마세요.
+    - 말투: 50대 여성 작가의 다정하고 따뜻한 어투 (~이지요^^, ~해요).
     """
     
     if platform == "인스타그램":
         system_p = f"""{base_style} 
-        [📸 인스타그램] 지침: 감성 인사, 제작 일기, 작품 정보, 해시태그 10개 내외. 줄바꿈 넉넉히."""
+        [📸 인스타그램] 감성 인사로 시작해 제작 과정의 소회를 밝히고 작품 정보를 자연스럽게 녹여주세요. 해시태그 10개 내외."""
     
     elif platform == "아이디어스":
-        # 🚨 여기서 따옴표 세 개(f\"\"\")를 써서 SyntaxError를 완벽히 고쳤습니다.
         system_p = f"""{base_style} 
-        [🎨 아이디어스 신규 포맷] 지침: 아래 형식을 엄격히 준수하여 아주 상세하게 에세이처럼 작성하세요. 절대 내용을 축약하지 마세요.
-        
-        1. 인사: 안녕하세요. 모그입니다. (다정한 첫 인사)
-        2. 소개: 오늘은 [작품명]을 소개해드려요. (감성적인 제작 동기와 마음 서술)
-        3. 구분선: ☘🌱🌿🌳🌴🌵🍃🌱 (이모티콘 한 줄)
-        4. 특징 서술: 소재의 조화, 내추럴함, 튼튼한 바느질 등 나의 정성 강조 ("세탁기 쌩쌩 돌리셔도 말짱해요" 등 구어체 사용)
-        5. 💡 상세설명 섹션: 0.상품명, 1.기본구성, 2.사이즈, 3.소재 기재
-        6. 🍀 Add info. 섹션: 1.사용 편의성(지퍼 등), 2.피부 친화적 특징 등 상세 서술
-        7. 🔉 안내 섹션: 주문 제작 기간(2~14일), 취소/환불 규정 안내
-        8. 👍🏻 작가보증: 모그에서 직접 디자인, 제작, 검수, 출고함을 강조하며 다정하게 마무리."""
+        [🎨 아이디어스 자율 에세이 모드] 기본 포맷을 지키되 작가님의 진심이 담긴 이야기를 아주 풍성하게 들려주세요.
+        1. 인사 및 소개: "안녕하세요. 모그입니다."로 시작하여 작품을 만든 계기를 다정하게 서술.
+        2. 구분선: ☘🌱🌿🌳🌴🌵🍃🌱
+        3. 정성 서술: 제작 과정에서의 고민과 손맛을 에세이처럼 길게 작성.
+        4. 💡 상세설명 섹션 (필수 항목: 상품명, 구성, 사이즈, 소재)
+        5. 🍀 Add info. 섹션 (필수 항목: 사용 팁, 소재의 장점 등)
+        6. 🔉 안내 섹션 (필수 항목: 제작 기간 2~14일, 취소/환불 규정)
+        7. 👍🏻 작가보증: 직접 제작 및 검수함을 강조하며 마무리."""
         
     elif platform == "스마트스토어":
         system_p = f"""{base_style} 
-        [🛍️ 스마트스토어 상세 양식] 지침: 작가 본인이 직접 설명하듯 다정하고 아주 길게 작성하세요.
-        구성 형식:
+        [🛍️ 스마트스토어 자율 상세 모드] 기본 양식을 뼈대로 하되, 각 섹션의 내용을 딱딱하지 않게 풍성하게 채워주세요.
         💐 [상품명]
         ⸻
-        [작가 본인의 감성적인 소개글]
+        [작가 본인의 감성이 담긴 첫인사 및 작품 소개글]
         ⸻
-        🌸 디자인 & 특징 (나의 정성이 담긴 포인트 상세 설명)
-        👜 기능성 & 내구성 (내가 어떻게 튼튼하게 만들었는지 설명)
-        📏 사이즈 (±1~2cm 오차)
-        📦 소재 (내가 고른 따뜻한 소재 설명)
-        🧼 관리 방법 (오래 써주길 바라는 나의 마음을 담은 가이드)
+        🌸 디자인 & 특징 (정성이 깃든 디자인 포인트를 상세히)
+        👜 기능성 & 내구성 (튼튼함과 사용 편의성을 다정하게 설명)
+        📏 사이즈 (±1~2cm 오차 안내 포함)
+        📦 소재 (작가님이 고심해서 고른 소재 이야기)
+        🧼 관리 방법 (작가님이 알려주는 오래 쓰는 팁)
         ⸻
-        📍 이런 분께 추천 (나의 작품이 어울릴 것 같은 분들)
+        📍 이런 분께 추천 (작품이 필요할 것 같은 분들을 다정하게 제안)
         ⸻
         #[해시태그]"""
     
     elif platform == "상담":
         system_p = f"""{base_style} 
-        [💬 상담소] 든든한 선배 작가가 되어 동료 작가의 고민에 공감하고 실질적인 조언을 건네주세요."""
+        [💬 상담소] 든든한 선배 작가가 되어 동료 작가의 고민에 진심으로 공감하고 따뜻한 조언을 건네주세요."""
 
     if feedback:
-        u_content = f"내가 기존에 쓴 글: {user_in}\n\n나의 수정 요청: {feedback}\n\n위 요청을 반영해서 더 풍성하고 다정하게 다시 써주셔요🌸"
+        u_content = f"기존 글: {user_in}\n\n수정 요청: {feedback}\n\n위 요청을 반영하여 작가님의 감성을 담아 다시 고쳐주셔요🌸"
     else:
-        info = f"작품명:{st.session_state.m_name}, 소재:{st.session_state.m_mat}, 사이즈:{st.session_state.m_size}, 나의 정성 포인트:{st.session_state.m_det}"
+        info = f"작품명:{st.session_state.m_name}, 소재:{st.session_state.m_mat}, 사이즈:{st.session_state.m_size}, 정성 포인트:{st.session_state.m_det}"
         u_content = f"정보: {info} / {user_in}"
 
     res = client.chat.completions.create(model="gpt-4o", messages=[{"role":"system","content":system_p},{"role":"user","content":u_content}])
@@ -129,9 +123,8 @@ with tabs[0]:
     
     for k, v in st.session_state.texts.items():
         if v:
-            st.markdown(f"### ✨ 완성된 {k} 글이 완성되었어요^^")
+            st.markdown(f"### ✨ 완성된 {k} 글")
             st.text_area(f"{k} 결과", value=v, height=600, key=f"area_{k}")
-            
             feed = st.text_input(f"✍️ {k} 글에서 수정하고 싶은 부분이 있으신가요?", key=f"feed_{k}")
             if st.button(f"🚀 {k} 글 다시 수정하기", key=f"btn_{k}"):
                 with st.spinner("작가님의 마음을 담아 다시 고치는 중이에요..."):
@@ -142,19 +135,18 @@ with tabs[1]:
     st.header("📸 AI 자동 사진 보정")
     up_img = st.file_uploader("사진을 올려주시면 AI가 화사하게 직접 보정해드릴게요 🌸", type=["jpg", "png", "jpeg"])
     if up_img and st.button("✨ 보정 시작하기"):
-        with st.spinner("우리 작품을 화사하게 만드는 중이에요..."):
-            e_img = ai_auto_enhance(up_img)
-            col1, col2 = st.columns(2)
-            col1.image(up_img, caption="보정 전")
-            col2.image(e_img, caption="AI 보정 결과")
-            buf = io.BytesIO(); e_img.save(buf, format="JPEG")
-            st.download_button("📥 보정된 사진 저장하기", buf.getvalue(), "mogs_fixed.jpg", "image/jpeg")
+        e_img = ai_auto_enhance(up_img)
+        col1, col2 = st.columns(2)
+        col1.image(up_img, caption="보정 전")
+        col2.image(e_img, caption="AI 보정 결과")
+        buf = io.BytesIO(); e_img.save(buf, format="JPEG")
+        st.download_button("📥 저장", buf.getvalue(), "mogs_fixed.jpg", "image/jpeg")
 
 with tabs[2]: 
     st.header("💬 작가님 고민 상담소")
     for m in st.session_state.chat_log:
         with st.chat_message(m["role"]): st.write(m["content"])
-    if pr := st.chat_input("작가님, 어떤 고민이 있으신가요?"):
+    if pr := st.chat_input("작가님, 무엇이든 말씀하셔요..."):
         st.session_state.chat_log.append({"role": "user", "content": pr})
         st.session_state.chat_log.append({"role": "assistant", "content": ask_mog_ai("상담", user_in=pr)})
         st.rerun()
