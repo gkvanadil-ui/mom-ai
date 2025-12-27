@@ -56,7 +56,7 @@ def ai_auto_enhance(img_file):
 def ask_mog_ai(platform, user_in="", feedback=""):
     client = openai.OpenAI(api_key=api_key)
     
-    # 1️⃣ [공통] 모그 작가님 기본 어투 규칙
+    # 따님이 정해주신 1️⃣ [공통] 모그 작가님 기본 어투 규칙
     base_style = """
     정체성: 50대 여성 핸드메이드 작가의 다정하고 따뜻한 마음.
     대표 어미: ~이지요^^, ~해요, ~좋아요, ~보내드려요 등 부드러운 말투.
@@ -64,15 +64,15 @@ def ask_mog_ai(platform, user_in="", feedback=""):
     감성 이모지: 꽃(🌸, 🌻), 구름(☁️), 반짝이(✨)를 과하지 않게 섞어서 사용.
     """
     
-    # 2️⃣ [플랫폼별] 특화 프롬프트 로직
+    # 따님이 정해주신 2️⃣ [플랫폼별] 특화 프롬프트 로직
     if platform == "인스타그램":
         system_p = f"{base_style} [📸 인스타그램 - 감성 일기 모드] 지침: 사진을 보자마자 마음이 따뜻해지는 문구로 시작할 것. 구성: [첫 줄 감성 문구] + [작가님의 제작 일기] + [작품 상세 정보] + [다정한 인사] + [해시태그]. 특징: 줄바꿈을 아주 넉넉히 해서 가독성을 높이고, 해시태그는 10개 내외로 달기."
     elif platform == "아이디어스":
-        system_p = f"{base_style} [🎨 아이디어스 - 정성 가득 모드] 지침: 작가님의 수고와 정성이 고객에게 고스란히 전달되게 할 것. 구성: 매우 잦은 줄바꿈과 짧은 문장 위주. 내용: '한 땀 한 땀', '밤새 고민하며' 등 정성이 듬뿍 느껴지는 단어 사용."
+        system_p = f"{base_style} [🎨 아이디어스 - 정성 가득 모드] 지침: 작가님의 수고와 정성이 고객에게 고스란히 전달되게 할 것. 매우 잦은 줄바꿈과 짧은 문장 위주. 내용: '한 땀 한 땀', '밤새 고민하며' 등 정성이 듬뿍 느껴지는 단어 사용."
     elif platform == "스토어":
-        system_p = f"{base_style} [🛍️ 스마트스토어 - 친절 정보 모드] 지침: 필요한 정보를 한눈에 보기 좋게 정리하되, 딱딱하지 않게 설명할 것. 구성: 구분선(⸻)을 사용하여 소재, 사이즈, 관리법을 명확히 구분. 특징: 전문적이면서도 다정한 '상담원' 같은 느낌으로 신뢰감 주기."
+        system_p = f"{base_style} [🛍️ 스마트스토어 - 친절 정보 모드] 지침: 필요한 정보를 한눈에 보기 좋게 정리하되, 딱딱하지 않게 설명할 것. 구분선(⸻)을 사용하여 소재, 사이즈, 관리법을 명확히 구분. 특징: 전문적이면서도 다정한 '상담원' 같은 느낌으로 신뢰감 주기."
     elif platform == "상담":
-        system_p = f"{base_style} [3️⃣ 상담소 전용 로직] 역할: 핸드메이드 작가들의 든든한 선배이자 다정한 동료 '모그 AI'. 규칙: 엄마의 고민에 깊이 공감해주고, 실질적인 도움(이름 짓기, 답장 문구 등)을 줄 것. 마무리: 항상 작가님의 활동을 진심으로 응원하는 따뜻한 격려 멘트 필수."
+        system_p = f"{base_style} [3️⃣ 상담소 고민 상담 전용 로직] 역할: 핸드메이드 작가들의 든든한 선배이자 다정한 동료 '모그 AI'. 규칙: 엄마의 고민에 깊이 공감해주고, 실질적인 도움(이름 짓기, 답장 문구 등)을 줄 것. 마무리: 항상 작가님의 활동을 진심으로 응원하는 따뜻한 격려 멘트 필수."
 
     if feedback:
         u_content = f"기존 글: {user_in} / 수정 요청사항: {feedback} / 반영해서 다시 다정하게 써주셔요🌸"
@@ -99,15 +99,25 @@ with c2:
     st.session_state.m_size = st.text_input("📏 사이즈", value=st.session_state.m_size)
 st.session_state.m_det = st.text_area("✨ 정성 포인트와 설명", value=st.session_state.m_det, height=150)
 
+# [🚨 오류 해결 핵심 저장 로직] URL을 제거하고 인증된 conn만 사용
 if st.button("💾 이 작품 정보 창고에 저장하기"):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
+        # 💡 URL 없이 conn.read()만 호출하여 인증 정보에 등록된 기본 시트를 불러옵니다.
         df = conn.read(ttl=0)
-        new_row = pd.DataFrame([{"name": st.session_state.m_name, "material": st.session_state.m_mat, "period": st.session_state.m_per, "size": st.session_state.m_size, "keys": st.session_state.m_det}])
-        conn.update(data=pd.concat([df, new_row], ignore_index=True))
+        new_row = pd.DataFrame([{
+            "name": st.session_state.m_name,
+            "material": st.session_state.m_mat,
+            "period": st.session_state.m_per,
+            "size": st.session_state.m_size,
+            "keys": st.session_state.m_det
+        }])
+        updated_df = pd.concat([df, new_row], ignore_index=True)
+        # 💡 conn.update() 역시 URL 없이 데이터만 보냅니다.
+        conn.update(data=updated_df)
         st.success("작가님, 창고에 예쁘게 저장해두었어요! 🌸")
     except Exception as e:
-        st.error(f"저장 오류: 편집자 권한 설정을 확인해주세요! ({e})")
+        st.error(f"저장 오류: 서비스 계정 인증에 실패했습니다. ({e})")
 
 st.divider()
 
@@ -126,8 +136,9 @@ with tabs[0]: # 판매글 쓰기 + 수정 요청 로직
             st.text_area(f"{k} 결과", value=v, height=300, key=f"area_{k}")
             feed = st.text_input(f"✍️ {k} 글에서 수정하고 싶은 부분이 있으신가요?", key=f"feed_{k}")
             if st.button(f"🚀 {k} 글 다시 수정하기", key=f"btn_{k}"):
-                st.session_state.texts[k] = ask_mog_ai(k, user_in=v, feedback=feed)
-                st.rerun()
+                with st.spinner("작가님의 말씀을 듣고 다시 고치는 중이에요..."):
+                    st.session_state.texts[k] = ask_mog_ai(k, user_in=v, feedback=feed)
+                    st.rerun()
 
 with tabs[1]: # 📸 AI 자동 사진 보정
     st.header("📸 AI 자동 사진 보정")
