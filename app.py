@@ -3,10 +3,10 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import openai
 
-# 1. 페이지 설정
+# 1. 페이지 설정 (가장 먼저 실행되어야 합니다)
 st.set_page_config(page_title="모그 AI 비서", layout="centered", page_icon="🌸")
 
-# --- ✨ UI/UX 스타일 설정 ---
+# --- ✨ UI/UX: 엄마를 위한 따뜻하고 큰 글씨 스타일 ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
@@ -31,18 +31,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. API 키 및 구글 시트 연결
+# 2. 필수 연결 설정
 api_key = st.secrets.get("OPENAI_API_KEY")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. 세션 상태 초기화 (데이터 저장 주머니)
+# 3. 데이터 보관함(세션 상태) 초기화
 if 'texts' not in st.session_state: st.session_state.texts = {"인스타": "", "아이디어스": "", "스토어": ""}
 if 'refined' not in st.session_state: st.session_state.refined = {"인스타": "", "아이디어스": "", "스토어": ""}
 if 'chat_history' not in st.session_state: st.session_state.chat_history = []
 if 'name' not in st.session_state: st.session_state.name = ""
 if 'keys' not in st.session_state: st.session_state.keys = ""
 
-# --- [공통 함수: AI 글쓰기] ---
+# --- [도우미 함수들] ---
 def process_mog_ai(guide):
     if not api_key: return "API 키를 확인해주세요🌸"
     client = openai.OpenAI(api_key=api_key)
@@ -62,11 +62,11 @@ def load_gs_data():
     try: return conn.read(ttl=0)
     except: return pd.DataFrame(columns=["name", "keys"])
 
-# --- 4. 메인 화면 시작 ---
+# --- 4. 메인 화면 구성 ---
 st.title("🌸 모그 작가님 AI 비서")
 st.write("### 오늘도 정성 가득한 하루 보내셔요 작가님! ✨")
 
-# 1구역: 정보 입력 (모든 기능의 기초)
+# [1구역] 정보 입력 (공통 정보)
 with st.container():
     st.header("1️⃣ 어떤 작품인가요?")
     st.session_state.name = st.text_input("📦 작품 이름", value=st.session_state.name, placeholder="예: 빈티지 튤립 파우치")
@@ -74,7 +74,7 @@ with st.container():
 
 st.divider()
 
-# ⭐⭐⭐ 2구역: 탭 정의 (여기가 에러 해결의 핵심!) ⭐⭐⭐
+# ⭐⭐⭐ [핵심] 탭을 여기서 먼저 정의합니다! ⭐⭐⭐
 tabs = st.tabs(["✍️ 판매글 쓰기", "📸 사진 보정법", "💬 고민 상담소", "📂 영구 작품 창고"])
 
 # --- Tab 1: 판매글 쓰기 ---
@@ -85,18 +85,18 @@ with tabs[0]:
         st.session_state.texts["인스타"] = process_mog_ai({"name": "인스타그램", "desc": "감성 일기 스타일, 해시태그 포함"})
         st.session_state.refined["인스타"] = ""
     if c2.button("🎨 아이디어스"):
-        st.session_state.texts["아이디어스"] = process_mog_ai({"name": "아이디어스", "desc": "한 땀 한 땀 정성을 강조하는 스타일"})
+        st.session_state.texts["아이디어스"] = process_mog_ai({"name": "아이디어스", "desc": "정성을 강조하는 스타일"})
         st.session_state.refined["아이디어스"] = ""
     if c3.button("🛍️ 스토어"):
-        st.session_state.texts["스토어"] = process_mog_ai({"name": "스마트스토어", "desc": "구분선을 활용한 다정한 정보 안내"})
+        st.session_state.texts["스토어"] = process_mog_ai({"name": "스마트스토어", "desc": "다정한 정보 안내"})
         st.session_state.refined["스토어"] = ""
 
     for k in ["인스타", "아이디어스", "스토어"]:
         if st.session_state.texts.get(k):
             st.info(f"📍 {k} 첫 번째 글")
             st.text_area(f"{k} 원본", value=st.session_state.texts[k], height=200, key=f"orig_{k}")
-            with st.expander("✨ 이 글을 다르게 고쳐볼까요?"):
-                feed = st.text_input("어떻게 고칠까요?", key=f"f_{k}")
+            with st.expander("✨ 글을 다르게 고쳐볼까요?"):
+                feed = st.text_input("요청사항", key=f"f_{k}")
                 if st.button("♻️ 다시 정성껏 쓰기", key=f"re_{k}"):
                     st.session_state.refined[k] = process_mog_ai({"name": k, "desc": f"원래 글: {st.session_state.texts[k]}\n요청: {feed}"})
                     st.rerun()
@@ -119,11 +119,14 @@ with tabs[1]:
 with tabs[2]:
     st.header("💬 모그 작가님 전용 상담소")
     for m in st.session_state.chat_history:
-        with st.chat_message(m["role"], avatar="🌸" if m["role"]=="user" else "🕯️"): st.write(m["content"])
+        avatar = "🌸" if m["role"] == "user" else "🕯️"
+        with st.chat_message(m["role"], avatar=avatar):
+            st.write(m["content"])
 
     if pr := st.chat_input("작가님, 어떤 고민이 있으셔요?"):
         st.session_state.chat_history.append({"role": "user", "content": pr})
-        with st.chat_message("user", avatar="🌸"): st.write(pr)
+        with st.chat_message("user", avatar="🌸"):
+            st.write(pr)
         with st.chat_message("assistant", avatar="🕯️"):
             with st.spinner("생각 중이지요..."):
                 ans = process_mog_ai({"name": "상담소", "desc": f"이전 대화 맥락을 기억하고 현실적인 조언 제공. 질문: {pr}"})
@@ -146,11 +149,13 @@ with tabs[3]:
             if st.session_state.name in df['name'].values:
                 df.loc[df['name'] == st.session_state.name, 'keys'] = st.session_state.keys
                 up_df = df
-            else: up_df = pd.concat([df, new_row], ignore_index=True)
+            else:
+                up_df = pd.concat([df, new_row], ignore_index=True)
             conn.update(data=up_df)
             st.success("창고에 저장되었습니다! 🌸")
             st.rerun()
-        else: st.warning("이름을 적어주세요.")
+        else:
+            st.warning("이름을 적어주세요.")
 
     st.divider()
     if not df.empty:
@@ -159,7 +164,8 @@ with tabs[3]:
                 st.write(row['keys'])
                 c1, c2 = st.columns(2)
                 if c1.button("📥 불러오기", key=f"gs_l_{i}"):
-                    st.session_state.name, st.session_state.keys = row['name'], row['keys']
+                    st.session_state.name = row['name']
+                    st.session_state.keys = row['keys']
                     st.rerun()
                 if c2.button("🗑️ 삭제", key=f"gs_d_{i}"):
                     conn.update(data=df.drop(i))
