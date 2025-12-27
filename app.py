@@ -26,7 +26,7 @@ st.markdown("""
 # 2. 필수 설정
 api_key = st.secrets.get("OPENAI_API_KEY")
 
-# 구글 시트 인증 (가장 원시적이고 강력한 줄바꿈 보정 버전)
+# 구글 시트 인증 (가장 원초적이고 강력한 줄바꿈 보정 버전)
 def get_gspread_client():
     try:
         # 💡 따님, Secrets 경로 문제를 해결하기 위해 가장 넓은 범위에서 데이터를 찾습니다.
@@ -71,7 +71,6 @@ for key in ['texts', 'chat_log', 'm_name', 'm_mat', 'm_per', 'm_size', 'm_det']:
 def ai_auto_enhance(img_file):
     client = openai.OpenAI(api_key=api_key)
     base64_image = base64.b64encode(img_file.getvalue()).decode('utf-8')
-    # 따님이 정해주신 AI 분석 기반 보정
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": [{"type": "text", "text": "사진 분석해서 보정값 골라줘."}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]}]
@@ -105,7 +104,7 @@ def ask_mog_ai(platform, user_in="", feedback=""):
         system_p += "\n3️⃣ [상담소] 고민 상담 전용. 든든한 선배 작가로서 공감하고 실질적 도움 주기. 격려 멘트 필수."
 
     if feedback:
-        u_content = f"기존 글: {user_in} / 수정 요청사항: {feedback} / 위 요청을 반영해서 다정하게 다시 써주셔요🌸"
+        u_content = f"기존 글: {user_in} / 수정 요청사항: {feedback} / 반영해서 다시 다정하게 써주셔요🌸"
     else:
         info = f"작품명:{st.session_state.m_name}, 소재:{st.session_state.m_mat}, 사이즈:{st.session_state.m_size}, 상세:{st.session_state.m_det}"
         u_content = f"정보: {info} / {user_in}"
@@ -130,6 +129,7 @@ st.session_state.m_det = st.text_area("✨ 정성 포인트와 설명", value=st
 if st.button("💾 이 작품 정보 창고에 저장하기"):
     try:
         gc = get_gspread_client()
+        # 💡 따님, Secrets 내부에서 'spreadsheet'라는 이름의 URL을 찾아옵니다.
         if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
             url = st.secrets["connections"]["gsheets"]["spreadsheet"]
         else:
@@ -165,10 +165,13 @@ with tabs[1]: # 📸 AI 자동 사진 보정 (3단계 유지)
     st.header("📸 AI 자동 사진 보정")
     up_img = st.file_uploader("사진을 올려주시면 AI가 화사하게 직접 보정해드릴게요 🌸", type=["jpg", "png", "jpeg"])
     if up_img and st.button("✨ 보정 시작하기"):
-        e_img = ai_auto_enhance(up_img)
-        st.image(e_img, caption="AI 보정 결과")
-        buf = io.BytesIO(); e_img.save(buf, format="JPEG")
-        st.download_button("📥 저장", buf.getvalue(), "mogs_fixed.jpg", "image/jpeg")
+        with st.spinner("보정 중..."):
+            e_img = ai_auto_enhance(up_img)
+            col1, col2 = st.columns(2)
+            col1.image(up_img, caption="보정 전")
+            col2.image(e_img, caption="AI 보정 결과")
+            buf = io.BytesIO(); e_img.save(buf, format="JPEG")
+            st.download_button("📥 저장", buf.getvalue(), "mogs_fixed.jpg", "image/jpeg")
 
 with tabs[2]: # 💬 고민 상담소 (별개 탭 분리 완료)
     st.header("💬 작가님 고민 상담소")
