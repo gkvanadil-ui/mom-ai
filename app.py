@@ -6,7 +6,7 @@ import openai
 # 1. 페이지 설정
 st.set_page_config(page_title="모그 AI 비서", layout="centered", page_icon="🌸")
 
-# --- ✨ UI/UX: 엄마를 위한 따뜻하고 큰 글씨 스타일 ---
+# --- ✨ UI/UX 스타일 설정 ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
@@ -31,18 +31,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# API 키 및 구글 시트 연결
+# 2. API 키 및 구글 시트 연결
 api_key = st.secrets.get("OPENAI_API_KEY")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 세션 상태 초기화
+# 3. 세션 상태 초기화 (데이터 저장 주머니)
 if 'texts' not in st.session_state: st.session_state.texts = {"인스타": "", "아이디어스": "", "스토어": ""}
 if 'refined' not in st.session_state: st.session_state.refined = {"인스타": "", "아이디어스": "", "스토어": ""}
 if 'chat_history' not in st.session_state: st.session_state.chat_history = []
 if 'name' not in st.session_state: st.session_state.name = ""
 if 'keys' not in st.session_state: st.session_state.keys = ""
 
-# --- [공통 함수] ---
+# --- [공통 함수: AI 글쓰기] ---
 def process_mog_ai(guide):
     if not api_key: return "API 키를 확인해주세요🌸"
     client = openai.OpenAI(api_key=api_key)
@@ -62,11 +62,11 @@ def load_gs_data():
     try: return conn.read(ttl=0)
     except: return pd.DataFrame(columns=["name", "keys"])
 
-# --- 메인 화면 ---
+# --- 4. 메인 화면 시작 ---
 st.title("🌸 모그 작가님 AI 비서")
 st.write("### 오늘도 정성 가득한 하루 보내셔요 작가님! ✨")
 
-# 1구역: 정보 입력
+# 1구역: 정보 입력 (모든 기능의 기초)
 with st.container():
     st.header("1️⃣ 어떤 작품인가요?")
     st.session_state.name = st.text_input("📦 작품 이름", value=st.session_state.name, placeholder="예: 빈티지 튤립 파우치")
@@ -74,7 +74,7 @@ with st.container():
 
 st.divider()
 
-# 2구역: 기능 탭
+# ⭐⭐⭐ 2구역: 탭 정의 (여기가 에러 해결의 핵심!) ⭐⭐⭐
 tabs = st.tabs(["✍️ 판매글 쓰기", "📸 사진 보정법", "💬 고민 상담소", "📂 영구 작품 창고"])
 
 # --- Tab 1: 판매글 쓰기 ---
@@ -113,7 +113,7 @@ with tabs[1]:
         st.markdown("#### 💚 네이버 편집기\n- 상품 올릴 때 **[편집]** 클릭\n- **[자동보정]**만 누르세요!")
     with col_b:
         st.markdown("#### 🪄 포토(Fotor) AI\n- 조명을 알아서 켜줘요.\n- **[AI 원클릭 보정]** 클릭!")
-        st.link_button("👉 포토 사이트 바로가기", "https://www.fotor.com/kr/")
+        st.link_button("👉 포토 사이트 바로가기", "https://www.fotor.com/kr/photo-editor-app/editor/basic")
 
 # --- Tab 3: 고민 상담소 ---
 with tabs[2]:
