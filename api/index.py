@@ -116,3 +116,7 @@ with tabs[1]:
         st.session_state.chat_log.append({"role": "user", "content": pr})
         st.session_state.chat_log.append({"role": "assistant", "content": ask_mog_ai("상담", user_in=pr)})
         st.rerun()
+
+# ... 기존 코드들 맨 아래에 추가 ...
+if __name__ == "__main__":
+    st.write("모그 AI 비서가 정상 작동 중입니다🌸")
