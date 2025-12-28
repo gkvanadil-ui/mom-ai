@@ -2,3 +2,4 @@ streamlit
 openai
 pillow
 firebase-admin
+streamlit-google-auth
