@@ -5,14 +5,23 @@ import io
 import base64
 import firebase_admin
 from firebase_admin import credentials, firestore
+from streamlit_google_auth import Authenticate
 
 # 1. 페이지 설정
 st.set_page_config(page_title="모그 AI 비서", layout="wide", page_icon="🌸")
 
-# --- 🔥 Firebase 초기화 (따님이 주신 키 정보 연동) ---
+# --- 🔐 구글 로그인 설정 (Secrets 정보 사용) ---
+auth = Authenticate(
+    secret_key=st.secrets.get("AUTH_SECRET_KEY", "default_secret_key"),
+    client_id=st.secrets.get("GOOGLE_CLIENT_ID"),
+    client_secret=st.secrets.get("GOOGLE_CLIENT_SECRET"),
+    redirect_uri=st.secrets.get("REDIRECT_URI"),
+    cookie_name="mom_ai_login"
+)
+
+# --- 🔥 Firebase 초기화 ---
 if not firebase_admin._apps:
     try:
-        # Vercel/Streamlit Secrets에 등록한 FIREBASE_SERVICE_ACCOUNT 사용
         cred = credentials.Certificate(dict(st.secrets["FIREBASE_SERVICE_ACCOUNT"]))
         firebase_admin.initialize_app(cred)
     except Exception as e:
@@ -44,6 +53,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# --- 🔑 로그인 체크 ---
+auth.check_authentification()
+
+if not st.session_state.get('connected'):
+    st.title("🌸 모그 작가님 AI 비서 🌸")
+    st.markdown("<h3 style='text-align: center;'>작가님, 로그인을 해주셔야 기록이 저장돼요^^</h3>", unsafe_allow_html=True)
+    auth.login()
+    st.stop()
+
+# 로그인 성공 시 유저 이메일을 ID로 사용
+user_id = st.session_state['user_info'].get('email', 'mom_mog_01')
+
 # 2. 필수 설정
 api_key = st.secrets.get("OPENAI_API_KEY")
 
@@ -55,10 +76,7 @@ def load_data(uid):
     doc = db.collection("users").document(uid).get()
     return doc.to_dict() if doc.exists else None
 
-# 엄마 전용 고정 ID (추후 구글 로그인 연동 시 이메일로 변경)
-user_id = "mom_mog_01"
-
-# 세션 상태 초기화 및 Firebase 데이터 불러오기
+# 세션 상태 초기화 및 데이터 로드 (로그인 직후 1회 실행)
 if 'init_done' not in st.session_state:
     saved = load_data(user_id)
     if saved:
@@ -90,25 +108,23 @@ def ask_mog_ai(platform, user_in="", feedback=""):
     - 당신은 작가 '모그(Mog)' 본인입니다. 말투: ~이지요^^, ~해요 등 다정한 어투.
     - 특수기호(*, **) 절대 금지. 줄바꿈 넉넉하게.
     """
-    
-    if platform == "인스타그램":
-        system_p = f"{base_style} [📸 인스타그램] 감성 문구와 제작 일기 연결."
-    elif platform == "아이디어스":
-        system_p = f"{base_style} [🎨 아이디어스] 💡상세설명, 🍀Add info., 🔉안내, 👍🏻작가보증 포맷 엄수."
-    elif platform == "스마트스토어":
-        system_p = f"{base_style} [🛍️ 스토어] 💐상품명, 🌸디자인, 👜기능성, 📏사이즈, 📦소재, 🧼관리, 📍추천 엄수."
-    else:
-        system_p = f"{base_style} [💬 상담소] 다정한 선배 작가 시점."
+    if platform == "인스타그램": system_p = f"{base_style} [📸 인스타그램] 감성 문구와 제작 일기 연결."
+    elif platform == "아이디어스": system_p = f"{base_style} [🎨 아이디어스] 💡상세설명, 🍀Add info., 🔉안내, 👍🏻작가보증 포맷 엄수."
+    elif platform == "스마트스토어": system_p = f"{base_style} [🛍️ 스토어] 💐상품명, 🌸디자인, 👜기능성, 📏사이즈, 📦소재, 🧼관리, 📍추천 엄수."
+    else: system_p = f"{base_style} [💬 상담소] 다정한 선배 작가 시점."
 
     info = f"작품:{st.session_state.m_name}, 소재:{st.session_state.m_mat}, 정성:{st.session_state.m_det}"
-    if st.session_state.img_analysis:
-        info += f"\n[사진 디테일]: {st.session_state.img_analysis}"
-
+    if st.session_state.img_analysis: info += f"\n[사진 디테일]: {st.session_state.img_analysis}"
     content = f"수정 요청: {feedback}\n기존 내용: {user_in}" if feedback else f"정보: {info} / {user_in}"
     res = client.chat.completions.create(model="gpt-4o", messages=[{"role":"system","content":system_p},{"role":"user","content":content}])
     return res.choices[0].message.content.replace("**", "").replace("*", "").strip()
 
 # --- 3. 메인 화면 ---
+st.sidebar.title("🌸 작가님 정보")
+st.sidebar.write(f"접속계정: {user_id}")
+if st.sidebar.button("로그아웃"):
+    auth.logout()
+
 st.title("🌸 모그 작가님 AI 비서 🌸")
 
 with st.container():
@@ -138,7 +154,7 @@ with st.container():
                 'm_det': st.session_state.m_det, 'texts': st.session_state.texts,
                 'chat_log': st.session_state.chat_log, 'img_analysis': st.session_state.img_analysis
             })
-            st.success("작가님의 소중한 기록을 데이터베이스에 저장했어요! 🌸")
+            st.success("작가님의 소중한 기록을 저장했어요! 🌸")
 
 st.divider()
 
