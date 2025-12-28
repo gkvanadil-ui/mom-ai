@@ -7,7 +7,7 @@ import base64
 # 1. 페이지 설정
 st.set_page_config(page_title="모그 AI 비서", layout="wide", page_icon="🌸")
 
-# --- ✨ UI 스타일 가이드 (Vercel 최적화) ---
+# --- ✨ UI 스타일 가이드 (가독성 및 심미성 강화) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
@@ -21,9 +21,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 필수 설정 (Vercel 환경변수에서 가져옴)
-# Vercel Settings -> Environment Variables에 OPENAI_API_KEY를 등록하셔야 합니다.
-api_key = st.secrets.get("OPENAI_API_KEY") or st.sidebar.text_input("OpenAI API Key", type="password")
+# 2. 필수 설정
+api_key = st.secrets.get("OPENAI_API_KEY")
 
 # 세션 상태 초기화
 for key in ['texts', 'chat_log', 'm_name', 'm_mat', 'm_per', 'm_size', 'm_det', 'img_analysis']:
@@ -35,34 +34,32 @@ for key in ['texts', 'chat_log', 'm_name', 'm_mat', 'm_per', 'm_size', 'm_det', 
 
 # --- [로직 1: 사진 특징 분석] ---
 def analyze_image(img_file):
-    if not api_key: return "API 키가 설정되지 않았습니다."
     client = openai.OpenAI(api_key=api_key)
     base64_image = base64.b64encode(img_file.getvalue()).decode('utf-8')
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "user", "content": [{"type": "text", "text": "이 사진은 핸드메이드 작가 모그의 작품입니다. 사진의 특징을 다정하게 묘사해줘."}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]}]
+        messages=[{"role": "user", "content": [{"type": "text", "text": "핸드메이드 작가 모그의 작품이야. 색감과 디테일을 다정하게 묘사해줘."}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}]}]
     )
     return response.choices[0].message.content
 
 # --- [로직 2: 글쓰기 엔진] ---
 def ask_mog_ai(platform, user_in="", feedback=""):
-    if not api_key: return "API 키를 확인해주세요."
     client = openai.OpenAI(api_key=api_key)
-    base_style = "[절대 규칙: 1인칭 작가 시점] 당신은 작가 '모그(Mog)' 본인입니다. 다정하고 풍성하게 작성하세요."
+    base_style = """[절대 규칙: 1인칭 작가 시점] 당신은 작가 '모그(Mog)' 본인입니다. 말투: ~이지요^^, ~해요 등 다정한 50대 여성 작가 어투. 특수기호(*, **) 절대 금지."""
     
     if platform == "인스타그램":
-        system_p = f"{base_style} [📸 인스타그램] 감성 문구와 제작 일기 중심."
+        system_p = f"{base_style} [📸 인스타그램] 감성 일기 형식."
     elif platform == "아이디어스":
-        system_p = f"{base_style} [🎨 아이디어스] 💡상세설명, 🍀Add info., 🔉안내, 👍🏻작가보증 포맷 엄수."
+        system_p = f"{base_style} [🎨 아이디어스] 💡상세설명, 🍀Add info., 🔉안내, 👍🏻작가보증 포맷 엄수. 아주 길게 작성."
     elif platform == "스마트스토어":
         system_p = f"{base_style} [🛍️ 스토어] 💐상품명, 🌸디자인, 👜기능성, 📏사이즈, 📦소재, 🧼관리, 📍추천 포맷 엄수."
     else:
-        system_p = f"{base_style} [💬 상담소] 선배 작가의 따뜻한 조언."
+        system_p = f"{base_style} [💬 상담소] 선배 작가의 조언."
 
     info = f"작품:{st.session_state.m_name}, 소재:{st.session_state.m_mat}, 사이즈:{st.session_state.m_size}, 정성:{st.session_state.m_det}"
     if st.session_state.img_analysis: info += f"\n[사진 특징]: {st.session_state.img_analysis}"
     
-    content = f"수정 요청: {feedback}\n기존 내용: {user_in}" if feedback else f"정보: {info} / {user_in}"
+    content = f"수정 요청: {feedback}\n기존 글: {user_in}" if feedback else f"정보: {info} / {user_in}"
     res = client.chat.completions.create(model="gpt-4o", messages=[{"role":"system","content":system_p},{"role":"user","content":content}])
     return res.choices[0].message.content.replace("**", "").replace("*", "").strip()
 
@@ -76,7 +73,7 @@ with st.container():
         up_img = st.file_uploader("사진을 올려주세요^^", type=["jpg", "png", "jpeg"])
         if up_img:
             st.image(up_img, use_container_width=True)
-            if st.button("🔍 사진 분석 시작하기"):
+            if st.button("🔍 사진 분석 시작"):
                 st.session_state.img_analysis = analyze_image(up_img)
                 st.rerun()
     with col2:
@@ -85,16 +82,16 @@ with st.container():
         st.session_state.m_name = c1.text_input("📦 작품 이름", value=st.session_state.m_name)
         st.session_state.m_mat = c2.text_input("🧵 소재", value=st.session_state.m_mat)
         c3, c4 = st.columns(2)
-        st.session_state.m_per = c3.text_input("⏳ 제작 기간", value=st.session_state.m_per)
+        st.session_state.m_per = c3.text_input("⏳ 기간", value=st.session_state.m_per)
         st.session_state.m_size = c4.text_input("📏 사이즈", value=st.session_state.m_size)
-        st.session_state.m_det = st.text_area("✨ 정성 포인트와 설명", value=st.session_state.m_det, height=120)
+        st.session_state.m_det = st.text_area("✨ 정성 포인트", value=st.session_state.m_det, height=120)
 
 st.divider()
 
 tabs = st.tabs(["✍️ 판매글 쓰기", "💬 고민 상담소"])
 
 with tabs[0]:
-    st.markdown("### 🚀 플랫폼을 선택해주세요")
+    st.markdown("### 🚀 플랫폼 선택")
     b1, b2, b3 = st.columns(3)
     if b1.button("📸 인스타그램"): st.session_state.texts["인스타"] = ask_mog_ai("인스타그램")
     if b2.button("🎨 아이디어스"): st.session_state.texts["아이디어스"] = ask_mog_ai("아이디어스")
@@ -103,10 +100,10 @@ with tabs[0]:
     for p_name, key in [("인스타그램", "인스타"), ("아이디어스", "아이디어스"), ("스마트스토어", "스토어")]:
         if st.session_state.texts[key]:
             st.markdown(f"---")
-            st.markdown(f"### ✨ 완성된 {p_name} 글입니다^^")
+            st.markdown(f"### ✨ 완성된 {p_name} 글")
             st.markdown(f'<div class="result-card">{st.session_state.texts[key].replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
             col_f1, col_f2 = st.columns([4, 1])
-            feedback = col_f1.text_input(f"✍️ 수정하고 싶은 점?", key=f"f_{key}")
+            feedback = col_f1.text_input(f"✍️ 수정 요청", key=f"f_{key}")
             if col_f2.button("🚀 반영", key=f"b_{key}"):
                 st.session_state.texts[key] = ask_mog_ai(p_name, user_in=st.session_state.texts[key], feedback=feedback)
                 st.rerun()
