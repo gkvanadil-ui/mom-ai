@@ -1,3 +1,0 @@
-{
-  "runCommand": "streamlit run api/index.py"
-}
