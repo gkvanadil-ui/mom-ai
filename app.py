@@ -10,8 +10,8 @@ from streamlit_google_auth import Authenticate
 # 1. 페이지 설정 (최상단 고정)
 st.set_page_config(page_title="모그 AI 비서", layout="wide", page_icon="🌸")
 
-# --- 🔐 구글 로그인 설정 (TypeError 에러 완벽 해결 버전) ---
-# 최신 라이브러리 규격에 맞춰 인자 이름을 google_client_id 등으로 유연하게 대응합니다.
+# --- 🔐 구글 로그인 설정 (TypeError 완벽 해결 버전) ---
+# 최신 버전 라이브러리는 'client_id' 대신 'google_client_id'를 사용합니다.
 try:
     auth = Authenticate(
         secret_key=st.secrets.get("AUTH_SECRET_KEY", "mog_secret_key_default"),
@@ -20,19 +20,14 @@ try:
         redirect_uri=st.secrets["REDIRECT_URI"],
         cookie_name="mom_ai_login_cookie"
     )
-except Exception:
-    # 인자명이 client_id인 버전일 경우 자동 대응
-    auth = Authenticate(
-        client_id=st.secrets["GOOGLE_CLIENT_ID"],
-        client_secret=st.secrets["GOOGLE_CLIENT_SECRET"],
-        redirect_uri=st.secrets["REDIRECT_URI"],
-        cookie_name="mom_ai_login_cookie"
-    )
+except Exception as e:
+    st.error(f"로그인 모듈 초기화 에러: {e}")
+    st.stop()
 
 # 🔑 로그인 체크
 auth.check_authentification()
 
-# 로그인 안 됐을 때 화면 (본문 노출 절대 차단)
+# 로그인 안 됐을 때 화면 (본문 노출 차단)
 if not st.session_state.get('connected'):
     st.markdown("<h1 style='text-align: center; color: #8D6E63;'>🌸 모그 작가님 AI 비서 🌸</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 20px;'>작가님, 안전한 기록 저장을 위해 로그인이 필요해요^^</p>", unsafe_allow_html=True)
@@ -41,7 +36,7 @@ if not st.session_state.get('connected'):
         auth.login()
     st.stop()
 
-# --- 로그인 성공 시 실행되는 본문 로직 ---
+# --- 로그인 성공 후 실행되는 본문 ---
 user_id = st.session_state['user_info'].get('email', 'mom_mog_01')
 
 # Firebase 초기화
@@ -145,31 +140,31 @@ st.title("🌸 모그 작가님 AI 비서 🌸")
 with st.container():
     col1, col2 = st.columns([1, 1.5], gap="large")
     with col1:
-        st.header("📸 작품 사진 분석")
-        up_img = st.file_uploader("작품 사진을 올려주세요^^", type=["jpg", "png", "jpeg"])
+        st.header("📸 사진 분석")
+        up_img = st.file_uploader("작품 사진 올려주세요^^", type=["jpg", "png", "jpeg"])
         if up_img:
             st.image(up_img, use_container_width=True)
-            if st.button("🔍 사진 분석 시작하기"):
+            if st.button("🔍 분석 시작"):
                 st.session_state.img_analysis = analyze_image(up_img)
                 st.rerun()
     with col2:
-        st.header("📝 작품 기본 정보")
+        st.header("📝 작품 정보")
         c1, c2 = st.columns(2)
-        st.session_state.m_name = c1.text_input("📦 작품 이름", value=st.session_state.m_name)
+        st.session_state.m_name = c1.text_input("📦 이름", value=st.session_state.m_name)
         st.session_state.m_mat = c2.text_input("🧵 소재", value=st.session_state.m_mat)
         c3, c4 = st.columns(2)
-        st.session_state.m_per = c3.text_input("⏳ 제작 기간", value=st.session_state.m_per)
+        st.session_state.m_per = c3.text_input("⏳ 기간", value=st.session_state.m_per)
         st.session_state.m_size = c4.text_input("📏 사이즈", value=st.session_state.m_size)
-        st.session_state.m_det = st.text_area("✨ 정성 포인트와 상세 설명", value=st.session_state.m_det, height=120)
+        st.session_state.m_det = st.text_area("✨ 포인트", value=st.session_state.m_det, height=120)
         
-        if st.button("💾 이 정보들 저장하기"):
+        if st.button("💾 정보 저장하기"):
             save_data(user_id, {
                 'm_name': st.session_state.m_name, 'm_mat': st.session_state.m_mat,
                 'm_per': st.session_state.m_per, 'm_size': st.session_state.m_size,
                 'm_det': st.session_state.m_det, 'texts': st.session_state.texts,
                 'chat_log': st.session_state.chat_log, 'img_analysis': st.session_state.img_analysis
             })
-            st.success("작가님의 소중한 기록을 데이터베이스에 저장했어요! 🌸")
+            st.success("저장 완료! 🌸")
 
 st.divider()
 
@@ -185,16 +180,15 @@ with tabs[0]:
     for p_name, key in [("인스타그램", "인스타"), ("아이디어스", "아이디어스"), ("스마트스토어", "스토어")]:
         if st.session_state.texts[key]:
             st.markdown(f"---")
-            st.markdown(f"### ✨ 완성된 {p_name} 글입니다^^")
+            st.markdown(f"### ✨ 완성된 {p_name} 글")
             st.markdown(f'<div class="result-card">{st.session_state.texts[key].replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
-            col_f1, col_f2 = st.columns([4, 1])
-            feedback = col_f1.text_input(f"✍️ 수정 요청 ({p_name})", key=f"f_{key}")
-            if col_f2.button("🚀 반영", key=f"b_{key}"):
+            feedback = st.text_input(f"✍️ 수정 요청 ({p_name})", key=f"f_{key}")
+            if st.button(f"🚀 반영하기", key=f"b_{key}"):
                 st.session_state.texts[key] = ask_mog_ai(p_name, st.session_state.texts[key], feedback)
                 st.rerun()
 
 with tabs[1]:
-    st.header("💬 작가님 고민 상담소")
+    st.header("💬 고민 상담소")
     for m in st.session_state.chat_log:
         with st.chat_message(m["role"]): st.write(m["content"])
     if pr := st.chat_input("작가님 고민을 말해주세요^^"):
