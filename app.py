@@ -6,37 +6,42 @@ import base64
 import firebase_admin
 from firebase_admin import credentials, firestore
 from streamlit_google_auth import Authenticate
+import json
+import os
 
 # 1. 페이지 설정 (최상단 고정)
 st.set_page_config(page_title="모그 AI 비서", layout="wide", page_icon="🌸")
 
-# --- 🔐 구글 로그인 설정 (TypeError 원천 차단 버전) ---
-# 최신 버전과 구버전의 인자 명칭 차이를 모두 극복하도록 구성했습니다.
+# --- 🔐 구글 로그인 설정 (FileNotFoundError 방어막) ---
+# 라이브러리가 파일을 요구하므로, Secrets의 내용을 임시 JSON 파일로 구워버리는 로직을 추가했습니다.
+client_secrets = {
+    "web": {
+        "client_id": st.secrets["GOOGLE_CLIENT_ID"],
+        "client_secret": st.secrets["GOOGLE_CLIENT_SECRET"],
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "redirect_uris": [st.secrets["REDIRECT_URI"]],
+    }
+}
+
+with open("client_secrets.json", "w") as f:
+    json.dump(client_secrets, f)
+
 try:
+    # 임시로 만든 client_secrets.json 파일을 사용하여 인증 초기화
     auth = Authenticate(
-        secret_key=st.secrets["AUTH_SECRET_KEY"],
-        google_client_id=st.secrets["GOOGLE_CLIENT_ID"],
-        google_client_secret=st.secrets["GOOGLE_CLIENT_SECRET"],
-        redirect_uri=st.secrets["REDIRECT_URI"],
-        cookie_name="mom_ai_login_cookie"
-    )
-except TypeError:
-    # 만약 위 방식이 실패하면, 인자 이름 없이 순서대로 주입 (Positional Arguments)
-    auth = Authenticate(
-        st.secrets["GOOGLE_CLIENT_ID"],
-        st.secrets["GOOGLE_CLIENT_SECRET"],
-        st.secrets["REDIRECT_URI"],
-        st.secrets["AUTH_SECRET_KEY"],
-        "mom_ai_login_cookie"
+        secret_key=st.secrets.get("AUTH_SECRET_KEY", "mog_secret_123"),
+        cookie_name="mom_ai_login_cookie",
+        client_secrets_file="client_secrets.json"
     )
 except Exception as e:
-    st.error(f"로그인 설정 초기화 실패: {e}")
+    st.error(f"로그인 모듈 초기화 에러: {e}")
     st.stop()
 
 # 🔑 로그인 체크
 auth.check_authentification()
 
-# 로그인 전 화면 (본문 노출 차단)
+# 로그인 전 화면
 if not st.session_state.get('connected'):
     st.markdown("<h1 style='text-align: center; color: #8D6E63;'>🌸 모그 작가님 AI 비서 🌸</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 20px;'>작가님, 안전한 기록 저장을 위해 로그인이 필요해요^^</p>", unsafe_allow_html=True)
@@ -84,7 +89,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 💾 Firebase 데이터 함수
+# 💾 Firebase 데이터 연동
 def save_data(uid, data): db.collection("users").document(uid).set(data)
 def load_data(uid):
     doc = db.collection("users").document(uid).get()
@@ -101,7 +106,7 @@ if 'init_done' not in st.session_state:
         })
     st.session_state.init_done = True
 
-# 🤖 [AI 엔진: 따님 설계 로직 완벽 반영]
+# 🤖 AI 로직 (따님의 플랫폼별 상세 포맷 완벽 보존)
 def analyze_image(img_file):
     client = openai.OpenAI(api_key=api_key)
     base64_image = base64.b64encode(img_file.getvalue()).decode('utf-8')
@@ -158,7 +163,7 @@ with st.container():
         st.session_state.m_name = c1.text_input("📦 이름", value=st.session_state.m_name)
         st.session_state.m_mat = c2.text_input("🧵 소재", value=st.session_state.m_mat)
         c3, c4 = st.columns(2)
-        st.session_state.m_per = c3.text_input("⏳ 제작 기간", value=st.session_state.m_per)
+        st.session_state.m_per = c3.text_input("⏳ 기간", value=st.session_state.m_per)
         st.session_state.m_size = c4.text_input("📏 사이즈", value=st.session_state.m_size)
         st.session_state.m_det = st.text_area("✨ 포인트", value=st.session_state.m_det, height=120)
         
