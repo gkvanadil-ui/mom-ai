@@ -10,18 +10,18 @@ from streamlit_google_auth import Authenticate
 # 1. 페이지 설정 (최상단)
 st.set_page_config(page_title="모그 AI 비서", layout="wide", page_icon="🌸")
 
-# --- 🔐 구글 로그인 설정 (인자값 최소화 및 방어 로직) ---
+# --- 🔐 구글 로그인 설정 (파일 없이 실행하는 로직) ---
+# FileNotFoundError를 피하기 위해 st.secrets의 정보를 직접 주입합니다.
 try:
-    # 가장 최신 버전 규격: 인자 이름을 생략하거나 필수값만 전달
     auth = Authenticate(
-        st.secrets["GOOGLE_CLIENT_ID"],
-        st.secrets["GOOGLE_CLIENT_SECRET"],
-        st.secrets["REDIRECT_URI"],
-        st.secrets.get("AUTH_SECRET_KEY", "mog_secret_key_123"), # secret_key 대신 positional로 전달 시도
-        "mom_ai_login_cookie"
+        secret_key=st.secrets.get("AUTH_SECRET_KEY", "mog_secret_key_123"),
+        google_client_id=st.secrets["GOOGLE_CLIENT_ID"],
+        google_client_secret=st.secrets["GOOGLE_CLIENT_SECRET"],
+        redirect_uri=st.secrets["REDIRECT_URI"],
+        cookie_name="mom_ai_login_cookie"
     )
-except TypeError:
-    # 인자 이름이 꼭 필요한 버전일 경우 대응
+except Exception:
+    # 인자명이 다른 버전을 위한 2차 방어
     auth = Authenticate(
         client_id=st.secrets["GOOGLE_CLIENT_ID"],
         client_secret=st.secrets["GOOGLE_CLIENT_SECRET"],
@@ -29,18 +29,24 @@ except TypeError:
         cookie_name="mom_ai_login_cookie"
     )
 
-# 🔑 로그인 체크 (UI 스타일 입히기 전에 실행)
+# 🔑 로그인 체크
 auth.check_authentification()
 
 if not st.session_state.get('connected'):
     st.markdown("<h1 style='text-align: center; color: #8D6E63;'>🌸 모그 작가님 AI 비서 🌸</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 20px;'>작가님, 안전한 기록 저장을 위해 로그인이 필요해요^^</p>", unsafe_allow_html=True)
+    
+    # 🚨 파일 에러를 방지하기 위해 라이브러리의 login() 대신 수동 버튼 생성 시도 가능하나
+    # 일단 현재 라이브러리 구조에서 최선을 다해 호출합니다.
     _, col, _ = st.columns([1, 2, 1])
     with col:
-        auth.login()
+        try:
+            auth.login()
+        except Exception as e:
+            st.error("로그인 버튼 생성 중 오류가 발생했습니다. 구글 콘솔의 리디렉션 URI 주소를 다시 확인해주세요.")
     st.stop()
 
-# --- [로그인 성공 후 본문 로직] ---
+# --- [로그인 성공 후 본문] ---
 user_id = st.session_state['user_info'].get('email', 'mom_mog_01')
 
 # Firebase 초기화
@@ -50,7 +56,7 @@ if not firebase_admin._apps:
         cred = credentials.Certificate(dict(firebase_info))
         firebase_admin.initialize_app(cred)
     except Exception as e:
-        st.error(f"Firebase 설정 확인 필요: {e}")
+        st.error(f"Firebase 설정 확인: {e}")
 
 db = firestore.client()
 api_key = st.secrets.get("OPENAI_API_KEY")
@@ -79,24 +85,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 💾 Firebase 데이터 연동
-def save_data(uid, data): db.collection("users").document(uid).set(data)
-def load_data(uid):
-    doc = db.collection("users").document(uid).get()
-    return doc.to_dict() if doc.exists else None
-
-# 세션 데이터 로드
-if 'init_done' not in st.session_state:
-    saved = load_data(user_id)
-    if saved: st.session_state.update(saved)
-    else:
-        st.session_state.update({
-            'texts': {"인스타": "", "아이디어스": "", "스토어": ""},
-            'chat_log': [], 'm_name': '', 'm_mat': '', 'm_per': '', 'm_size': '', 'm_det': '', 'img_analysis': ''
-        })
-    st.session_state.init_done = True
-
-# 🤖 [AI 로직: 따님 설계 100% 반영]
+# 🤖 [AI 로직: 따님 설계 반영]
 def analyze_image(img_file):
     client = openai.OpenAI(api_key=api_key)
     base64_image = base64.b64encode(img_file.getvalue()).decode('utf-8')
@@ -118,29 +107,32 @@ def ask_mog_ai(platform, user_in="", feedback=""):
     elif platform == "아이디어스":
         system_p = f"{base_style} [🎨 아이디어스] 💡상세설명, 🍀Add info., 🔉안내, 👍🏻작가보증 포맷 엄수."
     elif platform == "스마트스토어":
-        system_p = f"{base_style} [🛍️ 스마트스토어] 💐상품명, 🌸디자인, 👜기능성, 📏사이즈, 📦소재, 🧼관리, 📍추천 엄수."
+        system_p = f"{base_style} [🛍️ 스마트스토어] 💐상품명, 🌸디자인, 👜기능성, 📏사이즈, 📦소재, 🧼관리, 📍추천 항목 엄수."
     else:
-        system_p = f"{base_style} [💬 고민 상담소] 다정한 선배 작가로서 공감하며 답변해줘."
+        system_p = f"{base_style} [💬 고민 상담소] 다정한 선배 작가로서 공감하며 답해줘."
 
-    info = f"작품:{st.session_state.m_name}, 소재:{st.session_state.m_mat}, 정성:{st.session_state.m_det}"
-    if st.session_state.img_analysis: info += f"\n[사진 분석]: {st.session_state.img_analysis}"
+    info = f"작품:{st.session_state.get('m_name','')}, 소재:{st.session_state.get('m_mat','')}, 정성:{st.session_state.get('m_det','')}"
+    if st.session_state.get('img_analysis'): info += f"\n[분석]: {st.session_state.img_analysis}"
     
     content = f"수정요청: {feedback}\n기존: {user_in}" if feedback else f"정보: {info} / {user_in}"
     res = client.chat.completions.create(model="gpt-4o", messages=[{"role":"system","content":system_p},{"role":"user","content":content}])
     return res.choices[0].message.content.replace("**", "").replace("*", "").strip()
 
-# --- 3. 메인 화면 UI ---
+# --- 3. 메인 화면 ---
 st.sidebar.title("🌸 작가님 정보")
 st.sidebar.write(f"접속: {user_id}")
 if st.sidebar.button("로그아웃"): auth.logout()
 
 st.title("🌸 모그 작가님 AI 비서 🌸")
 
-# (기존 UI 로직 동일 유지)
+# 세션 초기화
+if 'texts' not in st.session_state:
+    st.session_state.update({'texts': {"인스타": "", "아이디어스": "", "스토어": ""}, 'chat_log': [], 'm_name': '', 'm_mat': '', 'm_per': '', 'm_size': '', 'm_det': '', 'img_analysis': ''})
+
 with st.container():
     col1, col2 = st.columns([1, 1.5], gap="large")
     with col1:
-        st.header("📸 작품 사진 분석")
+        st.header("📸 사진 분석")
         up_img = st.file_uploader("사진 올려주세요^^", type=["jpg", "png", "jpeg"])
         if up_img:
             st.image(up_img, use_container_width=True)
@@ -148,17 +140,16 @@ with st.container():
                 st.session_state.img_analysis = analyze_image(up_img)
                 st.rerun()
     with col2:
-        st.header("📝 작품 정보 입력")
+        st.header("📝 작품 정보")
         st.session_state.m_name = st.text_input("📦 이름", value=st.session_state.m_name)
         st.session_state.m_mat = st.text_input("🧵 소재", value=st.session_state.m_mat)
         st.session_state.m_det = st.text_area("✨ 포인트", value=st.session_state.m_det, height=120)
-        if st.button("💾 이 정보들 저장하기"):
-            save_data(user_id, {
+        if st.button("💾 정보 저장하기"):
+            db.collection("users").document(user_id).set({
                 'm_name': st.session_state.m_name, 'm_mat': st.session_state.m_mat,
-                'm_det': st.session_state.m_det, 'texts': st.session_state.texts,
-                'chat_log': st.session_state.chat_log, 'img_analysis': st.session_state.img_analysis
+                'm_det': st.session_state.m_det, 'img_analysis': st.session_state.img_analysis
             })
-            st.success("작가님 기록 저장 완료! 🌸")
+            st.success("저장 완료! 🌸")
 
 st.divider()
 tabs = st.tabs(["✍️ 판매글 쓰기", "💬 고민 상담소"])
