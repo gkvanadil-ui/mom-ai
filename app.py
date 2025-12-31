@@ -366,3 +366,4 @@ with main_tab2:
         
         # AI 답변 저장
         st.session_state["consult_chat_log"].append({"role": "assistant", "content": ai_advice})
+    
