@@ -9,97 +9,108 @@ import datetime
 st.set_page_config(page_title="모그 작가님 AI 비서", layout="wide", page_icon="🌸")
 
 # ==========================================
-# [섹션 A] 접속 및 기기 식별 (Streamlit 네이티브 방식)
+# [섹션 A] 기기 식별 로직 (우선순위 재정립)
 # ==========================================
+# 지침: session_state -> query_params -> 생성 순서 엄수
 
-# 1. URL 파라미터 확인 (버전 호환성 확보)
-try:
-    # Streamlit 최신 버전
-    query_params = st.query_params
-    # 딕셔너리처럼 동작하지만 객체일 수 있어 안전하게 접근
-    device_id_val = query_params.get("device_id")
-    if isinstance(device_id_val, list): # 구버전 호환
-        device_id = device_id_val[0] if device_id_val else None
-    else:
-        device_id = device_id_val
-except:
-    # 아주 구버전일 경우
+# 1단계: 세션 스테이트 확인 (가장 빠르고 확실함)
+if "device_id" in st.session_state:
+    device_id = st.session_state["device_id"]
+else:
+    # 2단계: 세션에 없으면 URL 파라미터 확인 (보조 수단)
+    found_id = None
     try:
-        qp = st.experimental_get_query_params()
-        device_id = qp["device_id"][0] if "device_id" in qp else None
+        # Streamlit 최신 버전 대응
+        qp = st.query_params
+        val = qp.get("device_id")
+        if val:
+            found_id = val if isinstance(val, str) else val[0]
     except:
+        # 구버전 대응
+        try:
+            qp = st.experimental_get_query_params()
+            if "device_id" in qp:
+                found_id = qp["device_id"][0]
+        except:
+            pass
+            
+    if found_id:
+        # URL에서 찾았으면 세션에 즉시 동기화
+        st.session_state["device_id"] = found_id
+        device_id = found_id
+    else:
+        # 3단계: 아무것도 없으면 아직 '시작 전' 상태
         device_id = None
 
-# 2. device_id가 없는 경우 -> '시작하기' 화면 (렌더링 정지)
-if not device_id:
-    # 여기서 ID를 미리 생성해둡니다.
-    if 'temp_new_id' not in st.session_state:
-        st.session_state.temp_new_id = f"mog_{str(uuid.uuid4())[:8]}"
-
-    # --- 랜딩 페이지 UI ---
+# ==========================================
+# [섹션 B] 시작 화면 (device_id가 없을 때만 진입)
+# ==========================================
+if device_id is None:
     st.markdown("""
     <div style='text-align: center; padding-top: 50px; padding-bottom: 20px;'>
         <h1 style='color: #FF4B4B;'>🌸 모그 작가님 AI 비서</h1>
         <p style='font-size: 1.2em; color: #555;'>
             작가님, 환영합니다.<br>
-            아래 버튼을 누르면 작업을 시작하실 수 있어요.
+            아래 버튼을 한번만 눌러주세요.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    # 중앙 정렬을 위한 컬럼 배치
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        # [핵심 수정] Streamlit 네이티브 버튼 사용
-        # 이 버튼은 iframe이 아니라 앱 자체에서 작동하므로 무조건 클릭됩니다.
+        # [핵심 수정] 버튼 클릭 시 로직 순서 강제
         if st.button("🚀 작가님, 여기를 눌러 시작해주세요", use_container_width=True, type="primary"):
-            # 1. URL에 device_id 박아넣기
-            new_id = st.session_state.temp_new_id
+            # 1. 고유 ID 생성
+            new_id = f"mog_{str(uuid.uuid4())[:8]}"
             
+            # 2. [절대 규칙] 세션 스테이트에 먼저 저장 (진실의 원천)
+            st.session_state["device_id"] = new_id
+            
+            # 3. URL 파라미터 업데이트 (보조 - 즐겨찾기용)
             try:
-                # 최신 버전
                 st.query_params["device_id"] = new_id
             except:
-                # 구버전
-                st.experimental_set_query_params(device_id=new_id)
+                try:
+                    st.experimental_set_query_params(device_id=new_id)
+                except:
+                    pass
             
-            # 2. 즉시 새로고침 (이때 URL 파라미터를 물고 다시 시작함)
+            # 4. 강제 리런 (이제 세션에 값이 있으므로 다음 실행 땐 이 화면을 건너뜀)
             st.rerun()
 
-    # 안내 문구
     st.markdown("""
     <div style='text-align: center; margin-top: 30px; font-size: 0.9em; color: #888;'>
-        * 버튼을 누르시면 작가님만의 작업 공간이 생성됩니다.<br>
-        * 생성된 주소를 <b>[즐겨찾기]</b> 해두시면 내용을 계속 이어서 쓰실 수 있어요.
+        * 버튼을 누르시면 작가님만의 작업 주소가 생성됩니다.<br>
+        * 생성된 주소를 <b>[즐겨찾기]</b> 해두시면 편해요.
     </div>
     """, unsafe_allow_html=True)
     
-    # ID가 없으므로 여기서 코드 실행을 멈춥니다. (흰 화면 방지용 UI가 위에 있으므로 OK)
+    # [중요] 안내 화면이 다 그려졌으므로 여기서 멈춤 (흰 화면 방지)
     st.stop()
 
-
 # ==========================================
-# [섹션 B] 여기서부터는 device_id가 있는 상태 (메인 앱)
+# [섹션 C] 메인 앱 로직 (device_id 확보 이후)
 # ==========================================
+# 여기 도달했다는 것은 st.session_state['device_id']가 확실히 있다는 뜻
 
-# Firebase 연결
+# Firebase 연결 (ID 확보 후 안전하게 시도)
 db = None
 try:
     if not firebase_admin._apps:
         if "FIREBASE_SERVICE_ACCOUNT" not in st.secrets:
-            st.error("🚨 설정(Secrets) 확인이 필요합니다.")
+            st.error("🚨 Secrets 설정이 필요합니다.")
             st.stop()
-            
+        
         cred_dict = dict(st.secrets["FIREBASE_SERVICE_ACCOUNT"])
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
     db = firestore.client()
 except Exception as e:
-    st.error(f"서버 연결 중 오류가 발생했습니다: {e}")
-    # DB 없이도 UI는 뜨도록 pass
+    st.error(f"서버 연결 오류: {e}")
+    # DB 오류나도 UI는 띄움
 
-# --- CRUD 함수 ---
+# --- 데이터 처리 함수들 ---
 def save_to_db(work_id, data):
     if not db: return
     try:
@@ -141,10 +152,11 @@ def generate_copy(platform, name, material, point):
         return res.choices[0].message.content.replace("**", "").strip()
     except Exception as e: return f"오류: {str(e)}"
 
-# --- 메인 UI 구성 ---
+# --- UI 렌더링 ---
 if 'current_work' not in st.session_state: st.session_state.current_work = None
 my_works = load_works()
 
+# 사이드바
 with st.sidebar:
     st.title("📂 내 작품 목록")
     if st.button("➕ 새 작품 만들기", use_container_width=True, type="primary"):
@@ -154,16 +166,23 @@ with st.sidebar:
         save_to_db(uid, empty)
         st.rerun()
     st.divider()
+    if not my_works:
+        st.caption("작품이 없습니다.")
     for w in my_works:
         if st.button(f"📦 {w.get('name') or '이름 없음'}", key=w['work_id'], use_container_width=True):
             st.session_state.current_work = w
             st.rerun()
 
+# 메인 영역
 st.title("🌸 모그 작가님 AI 비서")
 
 if not st.session_state.current_work:
-    if my_works: st.session_state.current_work = my_works[0]; st.rerun()
-    else: st.info("👈 왼쪽 버튼을 눌러 새 작품을 만들어주세요!"); st.stop()
+    if my_works:
+        st.session_state.current_work = my_works[0]
+        st.rerun()
+    else:
+        st.info("👈 왼쪽의 [➕ 새 작품 만들기] 버튼을 눌러주세요!")
+        st.stop()
 
 curr = st.session_state.current_work
 c1, c2 = st.columns(2)
@@ -173,10 +192,12 @@ with c1:
     nn = st.text_input("작품 이름", curr.get('name',''))
     nm = st.text_input("소재", curr.get('material',''))
     np = st.text_area("특징", curr.get('point',''), height=150)
+    
     if nn!=curr.get('name') or nm!=curr.get('material') or np!=curr.get('point'):
         curr.update({'name':nn, 'material':nm, 'point':np})
         save_to_db(curr['work_id'], curr)
     st.caption("자동 저장됨")
+    
     if st.button("🗑️ 삭제"):
         delete_work(curr['work_id'])
         st.session_state.current_work = None
@@ -189,7 +210,7 @@ with c2:
     for i, (k, n) in enumerate([("insta","인스타"), ("idus","아이디어스"), ("store","스토어")]):
         with tabs[i]:
             if st.button(f"{n} 생성", key=f"b_{k}"):
-                if not nn: st.warning("이름 필요")
+                if not nn: st.warning("이름을 입력해주세요")
                 else:
                     with st.spinner("작성 중..."):
                         texts[k] = generate_copy(k, nn, nm, np)
