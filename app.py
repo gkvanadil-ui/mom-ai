@@ -4,17 +4,16 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import uuid
 import datetime
-import traceback # 상세 에러 출력을 위해 추가
+import traceback
 
 # 1. 페이지 설정
 st.set_page_config(page_title="모그 작가님 AI 비서", layout="wide", page_icon="🌸")
 
 # ==========================================
-# [섹션 A] 진실의 원천(Source of Truth) 확립
+# [섹션 A] 진실의 원천 (ID 확인)
 # ==========================================
-# 지침: 앱 시작 시점에 ID와 진입 플래그를 무조건 확정한다.
 
-# 1. URL 파라미터 안전하게 읽기 (읽기 전용)
+# 1. URL 파라미터 확인 (읽기 전용)
 found_id = None
 try:
     # 최신 Streamlit
@@ -29,30 +28,19 @@ except:
     except:
         pass
 
-# 2. Session State 초기화 (device_id가 없으면 즉시 생성)
+# 2. Session State 동기화 (URL에 있으면 복구)
+# 주의: 여기서 무조건 생성하지 않습니다. 없으면 '시작 화면'으로 보내기 위함입니다.
 if "device_id" not in st.session_state:
     if found_id:
-        st.session_state["device_id"] = found_id # URL에서 복구
-    else:
-        st.session_state["device_id"] = f"mog_{str(uuid.uuid4())[:8]}" # 신규 생성
-
-# 3. 진입 플래그 초기화
-if "entered" not in st.session_state:
-    # URL에 ID가 있었으면 이미 진입한 것으로 간주할 수도 있으나,
-    # 명확한 테스트를 위해 버튼 클릭을 유도하려면 False로 둡니다.
-    # (여기서는 루프 방지를 위해 버튼 클릭을 강제합니다)
-    st.session_state["entered"] = False
-
-# 편의를 위한 로컬 변수 (이후 로직은 이것만 씀)
-device_id = st.session_state["device_id"]
+        st.session_state["device_id"] = found_id
 
 # ==========================================
-# [섹션 B] 화면 분기 (Start Screen vs Main App)
+# [섹션 B] 화면 분기 (device_id 유무가 유일한 기준)
 # ==========================================
 
-# 지침: 'entered' 플래그가 False면 무조건 시작 화면
-if not st.session_state["entered"]:
-    # --- 시작 화면 (디버그 UI 포함) ---
+# 지침: device_id가 없으면 무조건 시작 화면, 있으면 무조건 메인 앱
+if "device_id" not in st.session_state:
+    # --- 시작 화면 ---
     st.markdown("""
     <div style='text-align: center; padding-top: 50px;'>
         <h1 style='color: #FF4B4B;'>🌸 모그 작가님 AI 비서</h1>
@@ -60,59 +48,53 @@ if not st.session_state["entered"]:
     </div>
     """, unsafe_allow_html=True)
     
-    # [강제 지시] 디버그 정보 가시화
-    with st.expander("🛠️ 시스템 상태 확인 (디버그)", expanded=True):
-        st.write(f"DEBUG: 현재 device_id(Session) = `{st.session_state.get('device_id')}`")
-        st.write(f"DEBUG: 감지된 URL 파라미터 = `{found_id}`")
-        st.write(f"DEBUG: 진입 플래그(entered) = `{st.session_state.get('entered')}`")
-
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # [강제 지시] 버튼 클릭 로직
+        # 시작 버튼: 누르는 순간 ID 생성 -> 세션 저장 -> 메인 진입
         if st.button("🚀 작가님, 여기를 눌러 시작해주세요", use_container_width=True, type="primary"):
-            # 1. 진입 플래그 확정 (루프 탈출의 핵심)
-            st.session_state["entered"] = True
+            # 1. ID 생성 및 세션 확정 (이게 생기면 다음 실행 땐 이 화면 안 뜸)
+            new_id = f"mog_{str(uuid.uuid4())[:8]}"
+            st.session_state["device_id"] = new_id
             
-            # 2. 클릭 확인 UI 노출
-            st.success("DEBUG: Start button clicked! 이동 중...")
-            
-            # 3. URL 업데이트 (보조 수단, 오직 experimental 사용)
+            # 2. URL 업데이트 (보조)
             try:
-                st.experimental_set_query_params(device_id=device_id)
-            except Exception as e:
-                st.warning(f"URL 설정 중 경고(무시 가능): {e}")
+                st.experimental_set_query_params(device_id=new_id)
+            except:
+                pass
             
-            # 4. 재실행
+            # 3. 즉시 재실행 (ID가 있으므로 메인으로 감)
             st.rerun()
     
-    # 버튼이 눌리지 않았을 때만 멈춤
+    # 버튼 안 눌렀으면 여기서 대기
     st.stop()
 
 # ==========================================
-# [섹션 C] 메인 앱 (여기 왔다는 건 entered=True라는 뜻)
+# [섹션 C] 메인 앱 (device_id 존재 시 무조건 실행)
 # ==========================================
 
-# [강제 지시] 메인 진입 마커
-st.success("DEBUG: Entered main app successfully")
-st.caption(f"현재 접속 ID: {device_id}")
+# 편의 변수
+device_id = st.session_state["device_id"]
 
-# 1. Firebase 연결 (예외 절대 숨기지 않음)
+# 진입 성공 마커 (성공 여부 시각적 확인용)
+st.success(f"✅ 작가님, 환영합니다! (ID: {device_id})")
+
+# 1. Firebase 연결
 db = None
 try:
     if not firebase_admin._apps:
         if "FIREBASE_SERVICE_ACCOUNT" not in st.secrets:
-            raise ValueError("Secrets에 'FIREBASE_SERVICE_ACCOUNT'가 없습니다.")
+            raise ValueError("Secrets 설정을 확인해주세요.")
         
         cred_dict = dict(st.secrets["FIREBASE_SERVICE_ACCOUNT"])
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
     db = firestore.client()
 except Exception as e:
-    st.error("🚨 Firebase 연결 실패 (이 에러가 보이면 서버 설정 문제임)")
-    st.code(traceback.format_exc()) # 상세 에러 출력
-    st.stop() # 더 이상 진행 불가
+    st.error("🚨 서버 연결 실패")
+    st.code(traceback.format_exc())
+    st.stop()
 
-# 2. 데이터 처리 함수 (예외 노출)
+# 2. 데이터 함수
 def save_to_db(work_id, data):
     if not db: return
     try:
@@ -124,7 +106,7 @@ def save_to_db(work_id, data):
             **data
         })
     except Exception as e:
-        st.error(f"저장 중 오류 발생: {e}")
+        st.error(f"저장 오류: {e}")
 
 def load_works():
     if not db: return []
@@ -132,8 +114,7 @@ def load_works():
         docs = db.collection("works").where("device_id", "==", device_id).stream()
         return sorted([doc.to_dict() for doc in docs], key=lambda x: x.get('updated_at', datetime.datetime.min), reverse=True)
     except Exception as e:
-        st.error(f"목록 불러오기 실패: {e}")
-        st.code(traceback.format_exc())
+        st.error(f"불러오기 오류: {e}")
         return []
 
 def delete_work(work_id):
@@ -141,7 +122,7 @@ def delete_work(work_id):
     try:
         db.collection("works").document(f"{device_id}_{work_id}").delete()
     except Exception as e:
-        st.error(f"삭제 실패: {e}")
+        st.error(f"삭제 오류: {e}")
 
 def generate_copy(platform, name, material, point):
     if "OPENAI_API_KEY" not in st.secrets: return "🚨 API 키가 없습니다."
@@ -173,7 +154,7 @@ with st.sidebar:
         save_to_db(uid, empty)
         st.rerun()
     st.divider()
-    if not my_works: st.caption("저장된 작품이 없습니다.")
+    if not my_works: st.caption("목록이 비어있습니다.")
     for w in my_works:
         if st.button(f"📦 {w.get('name') or '이름 없음'}", key=w['work_id'], use_container_width=True):
             st.session_state.current_work = w
@@ -215,7 +196,7 @@ with c2:
     for i, (k, n) in enumerate([("insta","인스타"), ("idus","아이디어스"), ("store","스토어")]):
         with tabs[i]:
             if st.button(f"{n} 생성", key=f"b_{k}"):
-                if not nn: st.warning("이름 입력 필요")
+                if not nn: st.warning("이름을 입력해주세요")
                 else:
                     with st.spinner("작성 중..."):
                         texts[k] = generate_copy(k, nn, nm, np)
