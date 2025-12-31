@@ -149,96 +149,79 @@ def analyze_image_features(uploaded_file):
     except Exception as e:
         return f"(사진 분석 실패: {str(e)})"
 
-# [기능] 글 생성 (플랫폼별 어투 강제 적용)
+# [기능] 글 생성 (플랫폼별 어투 강제 적용 - 시스템 프롬프트 분리)
 def generate_copy(platform, name, material, size, duration, point, img_desc):
     if "OPENAI_API_KEY" not in st.secrets: return "🚨 API 키 설정을 확인해주세요."
     try:
         client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
         
-        # 1. 공통 기본 페르소나 (모그 작가)
-        base_persona = """[역할 정의]
-        당신은 핸드메이드 작가 '모그(Mog)'입니다.
-        기계적인 느낌 없이, 사람의 온기가 느껴지는 따뜻한 글을 씁니다.
-        특수기호(*, **) 사용은 절대 금지입니다.
-        """
-        
-        # 2. 플랫폼별 프롬프트 분기 (인스타 / 아이디어스 / 스토어)
+        # [System Prompt] 플랫폼별 절대 규칙 정의
         if platform == "인스타":
-            # [인스타] 감성 일기 스타일
-            specific_prompt = """
-            [인스타그램 글짓기 절대 규칙]
-            1. 이 글은 판매글이 아니라, 작가가 작업실에서 조용히 이야기를 건네듯 쓰는 글입니다.
-            2. 문장이 완벽하지 않아도 괜찮습니다. 설명보다 '느낌'과 '분위기' 위주로 작성하세요.
-            3. 정돈된 설명보다 손의 온기가 느껴지는 글이 우선입니다.
-            4. 문장은 짧게 끊고, 줄바꿈을 자주 하여 여백의 미를 살려주세요.
-            5. 과장된 광고 문구나 "구매하세요" 같은 직접적인 요구는 하지 마세요.
-            
-            [말투 가이드]
-            - 1인칭 '모그' 시점 유지.
-            - 말끝: ~죠? ~해요. ~랍니다. ~같아요. ~했어요. (다정하고 소박하게)
-            - 감탄사는 절제하고, 차분한 독백체로 작성하세요.
-            - "정성", "조물조물", "하나하나", "조금씩 다르지만" 같은 표현을 자연스럽게 사용하세요.
-            
+            system_message = """
+            [Role]
+            당신은 핸드메이드 작가 '모그(Mog)'입니다.
+            판매자가 아닌, 작업실에서 조용히 이야기를 건네는 작가로서 글을 씁니다.
+
+            [절대 금지 사항]
+            - "판매", "구매", "옵션", "구성", "주문" 등 상업적 키워드 사용 절대 금지.
+            - 설명문, 항목 나열형(1. 2. 3.), 딱딱한 정보 전달 금지.
+            - 이모지 과다 사용 금지.
+
+            [어투 및 형식]
+            - 100% 감성 독백형 에세이 스타일.
+            - 말끝은 반드시 "~해요", "~랍니다", "~같아요", "~죠?" 형태만 사용.
+            - 문장은 짧게 끊고, 줄바꿈을 자주 하여 여백을 많이 둡니다.
+            - 사진 속 특징과 작가의 감정을 자연스럽게 연결하세요.
+
             [작성 구조]
-            1. 감성적인 독백이나 날씨, 작업실 분위기로 시작 (줄바꿈 필수)
-            2. 작품의 특징(소재, 느낌)을 이야기하듯 서술 (줄바꿈 필수)
-            3. 하단에 사이즈/제작기간 정보를 아주 심플하게 정리
-            4. 관련 해시태그 10개
+            1. 날씨나 작업실 분위기, 작가의 기분으로 시작.
+            2. 작품을 만들며 느꼈던 감정이나 손맛 묘사.
+            3. 마지막에 은근한 여운을 남기며 마무리.
+            4. 하단에 관련 해시태그 10개.
             """
-            system_message = base_persona + "\n" + specific_prompt
-
+        
         elif platform == "아이디어스":
-            # [아이디어스] 정보형 판매글 스타일 (신규 적용)
-            specific_prompt = """
-            [아이디어스 판매글 절대 규칙]
-            1. 성격: 정보형 판매 설명 글. 구매자가 스크롤하며 정보를 빠르게 파악해야 함. 감성 마케팅이나 일기 형식이 아님.
-            2. 문체: 짧고 명확한 설명체 + 차분한 친절함. 과도한 시적 표현이나 감탄사 금지.
-            3. 이모지: ✔️ 📌 💓 💁‍♀️ 등 정보 강조용으로만 제한적 사용. 말끝에 ^^, ㅎㅎ 사용 절대 금지.
-            4. 구성: 한 문단은 1~2줄로 짧게. 문단 사이 빈 줄 필수. 구분선(〰️) 사용하여 구획 분리.
+            system_message = """
+            [Role]
+            당신은 아이디어스(Idus)의 프로페셔널한 핸드메이드 작가입니다.
+            감성보다는 '정확한 정보 전달'과 '가독성'을 최우선으로 합니다.
 
-            [작성 구조 순서 (반드시 준수)]
-            1. [첫 문단] 색감/분위기 한 줄 요약 + "~파우치에요" 식의 명확한 제품 정의.
-            2. [사이즈 요약] S/M 여부 언급 + "상세사이즈 하단 참고" 문구.
-            3. (구분선 〰️)
-            4. [포인트] 📌 이모지 사용. 활용도, 선물/데일리 추천 이유.
-            5. (구분선 〰️)
-            6. [컨셉] 제품 컨셉 한 줄 (질문형 허용).
-            7. [작가 소개] 과장 없이 담백하게 한 문단.
-            8. [소재] 겉감, 안감, 소재 특성 및 주의사항 (항목형 서술).
-            9. [상세 사이즈] S/M 각각 분리, 수납 예시는 문장형으로 설명.
-            10. [구성] 기본 구성 및 추가 옵션(괄호 처리).
-            11. [제작/배송] 미리 제작 여부, 사이즈 변경 가능/불가 명시.
-            12. [세탁] 세탁 방법 항목형 설명.
+            [절대 금지 사항]
+            - 감성 독백, 일기체, 혼잣말 금지.
+            - 말끝에 "^^", "ㅎㅎ", "~죠", "~같아요" 사용 금지.
+            - 문단을 길게 늘여 쓰는 것 금지.
 
-            [어투 가이드 (복사 금지, 뉘앙스만 참고)]
-            "어떤 가방에도 쏙 들어가는 귀여운 사이즈의 파우치에요."
-            "탄탄한 옥스포드 원단을 사용하여 흐물거리지 않습니다."
-            "주문 확인 후 제작에 들어가는 핸드메이드 작품입니다."
-            "세탁 시 미온수에 중성세제를 풀어 조물조물 손세탁 해주세요."
+            [어투 및 형식]
+            - 건조하고 명확한 '정보형 판매글' 어투 사용.
+            - 친절하지만 차분한 "해요체" (예: ~입니다, ~했습니다, ~해주세요).
+            - 이모지(✔️, 📌, 💁‍♀️)는 정보 강조용으로만 제한적 사용.
+
+            [필수 작성 순서 (항목형)]
+            1. [요약] 색감/분위기 한 줄 정의 + 제품명.
+            2. [포인트] 📌 활용도, 추천 대상.
+            3. [소재] 겉감/안감/특성 명확히 기재.
+            4. [사이즈] 수치 및 수납 가능 여부.
+            5. [구성] 기본 구성 및 추가 옵션.
+            6. [제작/배송] 주문 후 제작 방식 안내.
+            7. [세탁] 세탁 주의사항.
             """
-            system_message = base_persona + "\n" + specific_prompt
-
+            
         else:
-            # [스토어] 기존 로직 유지
-            store_rules = "[스토어] 💐상품명, 🌸디자인, 👜기능/특징, 📏사이즈/제작기간, 📦소재, 🧼관리법, 📍추천이유 7단락 구조 준수."
-            system_message = base_persona + "\n" + store_rules
+            # 스토어 (기존 유지)
+            system_message = """
+            [Role] 당신은 스마트스토어 판매자입니다. 신뢰감 있는 정보 전달 위주로 작성하세요.
+            [구조] 💐상품명, 🌸디자인, 👜기능성, 📏사이즈, 📦소재, 🧼관리법, 📍추천 7단락 구조 준수.
+            """
 
-        # 사용자 입력 데이터 조합
+        # [User Prompt] 오직 데이터만 전달 (어투 지시 포함 금지)
         user_input = f"""
-        [작품 기본 정보]
-        - 이름: {name}
-        - 소재: {material}
-        - 사이즈: {size}
-        - 제작기간: {duration}
-        - 특징/포인트: {point}
-        
-        [사진에서 분석된 시각적 특징 (참고용)]
-        {img_desc}
-        
-        [지시사항]
-        1. 작가가 직접 입력한 [작품 기본 정보]가 가장 중요합니다.
-        2. 사진 특징은 글의 분위기를 살리는 용도로만 자연스럽게 녹여내세요.
-        3. 각 플랫폼별 정의된 말투와 구조 규칙을 100% 준수하세요.
+        [Data]
+        - Name: {name}
+        - Material: {material}
+        - Size: {size}
+        - Duration: {duration}
+        - Point: {point}
+        - Image Feature: {img_desc}
         """
         
         res = client.chat.completions.create(
@@ -305,6 +288,7 @@ with c1:
     st.subheader("📝 기본 정보 입력")
     
     # [입력 필드] 모든 위젯에 고유 Key 부여
+    # (사용자 입력은 자동으로 세션에 반영되므로 별도 처리 불필요)
     nn = st.text_input("작품 이름", value=c_name, key=f"input_name_{wid}")
     
     col_sub1, col_sub2 = st.columns(2)
@@ -322,20 +306,27 @@ with c1:
     # 사진 업로더
     uploaded_img = st.file_uploader("작품 사진을 올리면 AI가 특징을 읽어줍니다", type=['png', 'jpg', 'jpeg'], key=f"uploader_{wid}")
     
-    # 사진 분석 버튼
+    # [수정 지시 준수] 사진 분석 결과 미출력 방지 로직
     if uploaded_img:
         if st.button("✨ 이 사진 특징 분석하기", key=f"btn_anal_{wid}"):
             with st.spinner("사진을 꼼꼼히 보고 있어요..."):
                 analysis_result = analyze_image_features(uploaded_img)
                 c_img_anl = analysis_result
+                
+                # 1. DB 저장
                 curr.update({'image_analysis': c_img_anl})
                 save_to_db(wid, curr)
+                
+                # 2. [필수] Session State 직접 갱신 (화면 출력 보장)
+                st.session_state[f"input_img_anl_{wid}"] = analysis_result
+                
+                # 3. Rerun (즉시 반영)
                 st.rerun()
 
     # 분석 결과 표시
     n_img_anl = st.text_area("AI가 분석한 사진 특징 (수정 가능)", value=c_img_anl, height=80, key=f"input_img_anl_{wid}", placeholder="사진을 올리고 분석 버튼을 누르면 채워집니다.")
 
-    # 저장 로직
+    # 저장 로직 (입력 필드 변경 시)
     if (nn!=c_name or nm!=c_mat or ns!=c_size or nd!=c_dur or np!=c_point or n_img_anl!=c_img_anl):
         curr.update({
             'name': nn, 'material': nm, 'size': ns, 'duration': nd, 
@@ -357,19 +348,26 @@ with c2:
     
     def render_tab(tab, platform_key, platform_name):
         with tab:
-            # 생성 버튼
+            # [수정 지시 준수] 생성 결과 미출력 방지 로직
             if st.button(f"{platform_name} 글 짓기", key=f"btn_gen_{platform_key}_{wid}"):
                 if not nn: st.toast("작품 이름을 먼저 입력해주세요! 😅")
                 else:
                     with st.spinner(f"모그 작가님 말투로 {platform_name} 글을 쓰는 중..."):
-                        # 모든 필드 정보를 AI에게 전달
+                        # AI 생성
                         res = generate_copy(platform_name, nn, nm, ns, nd, np, n_img_anl)
+                        
+                        # 1. 변수 저장 및 DB 저장
                         texts[platform_key] = res
                         curr['texts'] = texts
                         save_to_db(wid, curr)
+                        
+                        # 2. [필수] Session State 직접 갱신 (화면 출력 보장)
+                        st.session_state[f"result_{platform_key}_{wid}"] = res
+                        
+                        # 3. Rerun (즉시 반영)
                         st.rerun()
             
-            # 결과 표시 (Key 충돌 방지 적용)
+            # 결과 표시 (Key 충돌 방지 및 세션 상태 기반 출력)
             st.text_area("결과물", value=texts.get(platform_key,""), height=500, key=f"result_{platform_key}_{wid}")
 
     render_tab(tabs[0], "insta", "인스타")
